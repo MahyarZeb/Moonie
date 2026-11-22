@@ -1,0 +1,24 @@
+﻿{
+    "id":  "FEAT-007",
+    "type":  "chore",
+    "description":  "P7: responsive polish, animations with reduced motion, error boundaries, headers/CSP, env examples, README (including review notes 3 and 7), production-run header check. Depends on FEAT-001..006.",
+    "status":  "completed",
+    "steps":  [
+                  "Do plan.md tasks P7-1 through P7-7 in order.",
+                  "README must state that room:peek on a password room still returns count, name and host name (review note 3) and list pinned dependency versions (note 7; take them from FEAT-001 findings or package.json)."
+              ],
+    "acceptance_criteria":  [
+                                "Production start serves CSP frame-src for YouTube and Permissions-Policy display-capture=(self)",
+                                "next.config output contains no localhost; config test passes",
+                                "No fake buttons or placeholder text; no localhost in src/, shared/, signaling-server/src except dev.ts",
+                                "README and both .env.example files exist and match package.json scripts",
+                                "Phase committed"
+                            ],
+    "verification":  [
+                         "npm run typecheck; npm run lint; npm test; npm run build",
+                         "npm --prefix signaling-server test; npm --prefix signaling-server run build",
+                         "background npm start + Invoke-WebRequest header check, then stop"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "P7-1 responsive/tab bar, reduced-motion CSS, error/loading/not-found boundaries and reconnect banner already existed from earlier phases; no change needed. Added security-headers.ts (CSP + Permissions-Policy display-capture=(self), dev-only ws:/http:/unsafe-eval) wired in next.config.ts, with test src/lib/securityHeaders.test.ts. Prod start verified on / and /room/ABCDEF: CSP frame-src youtube + youtube-nocookie, Permissions-Policy present, no localhost. README.md and signaling-server/README.md added (room:peek note, pinned versions). Env examples already existed and match. localhost remains only in dev.ts, a comment in src/lib/webrtc/support.ts, and the config test. Gate: typecheck, lint, 252 root tests, build, 103 server tests, server build pass."
+}
