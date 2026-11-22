@@ -20,10 +20,15 @@ describe('security headers', () => {
     expect(dev).toMatch(/\shttp:/);
   });
 
-  it('ignores an insecure ws:// signaling URL in production', () => {
-    const prod = buildCsp({ dev: false, signalingUrl: 'ws://localhost:8787' });
-    expect(prod).not.toContain('localhost');
-    expect(prod).toContain('connect-src');
+  it('ignores a non-loopback ws:// signaling URL in production', () => {
+    const prod = buildCsp({ dev: false, signalingUrl: 'ws://signal.example.com' });
+    expect(prod).not.toContain('signal.example.com');
     expect(prod).toMatch(/\swss:/);
+  });
+
+  it('allows a loopback ws:// signaling URL in production so a local npm start works', () => {
+    const prod = buildCsp({ dev: false, signalingUrl: 'ws://localhost:8787' });
+    expect(prod).toContain('ws://localhost:8787');
+    expect(prod).not.toMatch(/(^|\s)(ws:|http:)(\s|;|$)/);
   });
 });

@@ -5,6 +5,7 @@ import { securityHeaders } from './security-headers';
 const nextConfig = (phase: string): NextConfig => ({
   reactStrictMode: true,
   poweredByHeader: false,
+  allowedDevOrigins: ['127.0.0.1'],
   async headers() {
     const headers = securityHeaders({
       dev: phase === PHASE_DEVELOPMENT_SERVER,

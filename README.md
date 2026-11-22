@@ -115,7 +115,8 @@ Identity is created in the browser (`src/lib/identity`) and rooms are held in me
 
 ## Security headers
 
-`security-headers.ts` sets a Content-Security-Policy (YouTube frames only from youtube.com and youtube-nocookie.com, production `connect-src` limited to your `wss://` signaling host), `Permissions-Policy: display-capture=(self)`, `X-Content-Type-Options` and `Referrer-Policy`. Development additionally allows `ws:` and `http:`.
+`security-headers.ts` sets a Content-Security-Policy (YouTube frames only from youtube.com and youtube-nocookie.com, production `connect-src` limited to your `wss://` signaling host), `Permissions-Policy: display-capture=(self)`, `X-Content-Type-Options` and `Referrer-Policy`. A loopback ws:// signaling URL is also allowed so 
+pm start works locally. Development additionally allows `ws:` and `http:`.
 
 ## Pinned dependency versions
 

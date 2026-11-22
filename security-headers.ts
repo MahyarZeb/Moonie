@@ -11,7 +11,8 @@ function signalingSources(signalingUrl: string | undefined, dev: boolean): strin
     try {
       const u = new URL(signalingUrl);
       if (u.protocol === 'ws:' || u.protocol === 'wss:') {
-        if (dev || u.protocol === 'wss:') sources.push(`${u.protocol}//${u.host}`);
+        const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+        if (dev || u.protocol === 'wss:' || loopback) sources.push(`${u.protocol}//${u.host}`);
       }
     } catch {
       /* ignore invalid URL, the generic fallback below applies */

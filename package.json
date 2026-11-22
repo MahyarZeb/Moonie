@@ -5,8 +5,8 @@
   "description": "Moonie: a cozy watch party and hangout site (ephemeral rooms, WebRTC, no accounts, no database).",
   "scripts": {
     "setup": "npm install && npm --prefix signaling-server install",
-    "dev": "next dev",
-    "dev:all": "concurrently -k -n web,signal \"next dev\" \"npm --prefix signaling-server run dev\"",
+    "dev": "next dev -p 3000",
+    "dev:all": "concurrently -k -n web,signal \"next dev -p 3000\" \"npm --prefix signaling-server run dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
