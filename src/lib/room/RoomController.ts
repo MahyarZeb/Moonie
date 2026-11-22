@@ -1,6 +1,7 @@
 import type { CreateRoomInput, JoinRoomInput } from '@shared/protocol';
 import { clearSession, loadIdentity, readSession, saveIdentity, writeSession } from '@/lib/identity/identity';
 import { TransportError, type SignalingTransport } from '@/lib/signaling/types';
+import { LocalFileStore } from '@/lib/localfile/LocalFileStore';
 import { ShareBroadcaster } from '@/lib/webrtc/ShareBroadcaster';
 import type { RoomError } from './reducer';
 import type { RoomStore } from './roomStore';
@@ -51,6 +52,14 @@ export class RoomController {
       onEnded: (message) => this.notifier(message),
     });
     return this.broadcaster;
+  }
+
+  private localFileStore: LocalFileStore | null = null;
+
+  /** This tab's chosen local video file. It lives as long as the room does. */
+  get localFile(): LocalFileStore {
+    this.localFileStore ??= new LocalFileStore();
+    return this.localFileStore;
   }
 
   /** Subscribes the transport to the store. Returns the cleanup function. */
@@ -108,6 +117,7 @@ export class RoomController {
       return;
     }
     this.transport.leaveRoom();
+    this.localFileStore?.clear();
     clearSession();
     this.attemptKey = null;
     this.store.dispatch({ type: 'reset' });

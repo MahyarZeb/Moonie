@@ -1,4 +1,4 @@
-import type { MediaState, ServerMessage } from '@shared/protocol';
+import type { LocalFileMeta, MediaState, ServerMessage } from '@shared/protocol';
 import type { RoomStore } from '@/lib/room/roomStore';
 import { TransportError, type SignalingTransport } from '@/lib/signaling/types';
 import { startDisplayCapture, type CaptureFailure, type CaptureResult } from './capture';
@@ -52,6 +52,7 @@ export class ShareBroadcaster {
   private stream: MediaStream | null = null;
   private sessionId: string | null = null;
   private seenOwn = false;
+  private kind: 'screen' | 'file' = 'screen';
   private seq = 0;
   private links = new Map<string, { linkId: string; link: PeerLink }>();
   private offStore: (() => void) | null = null;
@@ -81,12 +82,36 @@ export class ShareBroadcaster {
       this.setState({ status: 'idle', error: { reason: cap.reason, message: cap.message } });
       return;
     }
-    this.stream = cap.stream;
-    this.setState({ stream: cap.stream, hasAudio: cap.hasAudio });
-    const video = cap.stream.getVideoTracks()[0];
+    await this.begin(token, cap.stream, cap.hasAudio, { source: 'screen' });
+  }
+
+  /**
+   * Starts streaming a local file whose element was already captured. `file` must equal the room's
+   * current same-file media, otherwise the server rejects it and the tracks are stopped.
+   */
+  async startFile(stream: MediaStream, hasAudio: boolean, file: LocalFileMeta): Promise<void> {
+    if (this.state.status !== 'idle') {
+      for (const t of stream.getTracks()) t.stop();
+      return;
+    }
+    const token = ++this.seq;
+    this.setState({ status: 'starting', error: null });
+    await this.begin(token, stream, hasAudio, { source: 'file', file });
+  }
+
+  private async begin(
+    token: number,
+    stream: MediaStream,
+    hasAudio: boolean,
+    request: { source: 'screen' } | { source: 'file'; file: LocalFileMeta },
+  ): Promise<void> {
+    const isFile = request.source === 'file';
+    this.stream = stream;
+    this.setState({ stream, hasAudio });
+    const video = stream.getVideoTracks()[0];
     if (video) {
       try {
-        video.contentHint = 'detail';
+        video.contentHint = isFile ? 'motion' : 'detail';
       } catch {
         /* optional */
       }
@@ -96,9 +121,14 @@ export class ShareBroadcaster {
     let media: MediaState | null = null;
     let failure: string | null = null;
     try {
-      const reply = await this.deps.transport.request({ type: 'share:start', source: 'screen', hasAudio: cap.hasAudio });
+      const reply = await this.deps.transport.request(
+        request.source === 'file'
+          ? { type: 'share:start', source: 'file', hasAudio, file: request.file }
+          : { type: 'share:start', source: 'screen', hasAudio },
+      );
       media = reply.type === 'media:state' ? reply.media : null;
-      if (media?.kind !== 'screen') failure = 'The server did not start the share.';
+      const ok = isFile ? media?.kind === 'local' && media.delivery === 'stream' : media?.kind === 'screen';
+      if (!ok) failure = 'The server did not start the share.';
     } catch (err) {
       failure = err instanceof TransportError ? (FRIENDLY[err.code] ?? err.message) : 'Something went wrong.';
     }
@@ -108,13 +138,14 @@ export class ShareBroadcaster {
       if (!failure) this.deps.transport.send({ type: 'share:stop' });
       return;
     }
-    if (failure || media?.kind !== 'screen') {
+    if (failure || (media?.kind !== 'screen' && media?.kind !== 'local') || !media.sessionId) {
       this.releaseStream();
       this.setState({ ...IDLE, error: { reason: 'rejected', message: `Couldn't start sharing: ${failure ?? 'unknown error'}` } });
       return;
     }
 
     this.sessionId = media.sessionId;
+    this.kind = isFile ? 'file' : 'screen';
     this.seenOwn = false;
     this.setState({ status: 'sharing' });
     this.offStore = this.deps.store.subscribe(this.checkStore);
@@ -122,7 +153,6 @@ export class ShareBroadcaster {
     if (typeof window !== 'undefined') window.addEventListener('beforeunload', this.onUnload);
     this.checkStore();
   }
-
   /** The user's own Stop button. Tells the server, then tears down. */
   stop(): void {
     const hadSession = this.sessionId !== null;
@@ -156,7 +186,8 @@ export class ShareBroadcaster {
     }
     if (!this.seenOwn) return;
     const stillHost = !!s.snapshot && s.snapshot.hostId === s.selfId;
-    this.teardown(!s.snapshot || stillHost ? 'Screen sharing ended' : 'Screen sharing ended because someone else is host now');
+    const what = this.kind === 'file' ? 'Streaming' : 'Screen sharing';
+    this.teardown(!s.snapshot || stillHost ? `${what} ended` : `${what} ended because someone else is host now`);
   };
 
   private pruneLinks(): void {

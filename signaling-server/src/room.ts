@@ -505,6 +505,20 @@ export class Room {
     return { ok: true };
   }
 
+  /**
+   * `local:ready` from any participant. Accepted only for the current same-file media and revision.
+   * Anything else is ignored without a reply (the client re-sends on the next revision), and a repeat
+   * of the stored value is a no-op without a broadcast.
+   */
+  localReady(actorId: string, rev: number, ready: boolean): void {
+    const m = this.media;
+    if (m?.kind !== 'local' || m.delivery !== 'same-file' || m.rev !== rev) return;
+    const sp = this.participants.get(actorId);
+    if (!sp || (sp.participant.hasFile ?? false) === ready) return;
+    sp.participant.hasFile = ready;
+    this.broadcast({ type: 'participant:updated', participant: { ...sp.participant } });
+  }
+
   stopShare(actorId: string): Fail | { ok: true } {
     if (actorId !== this.hostId) return fail('not_host', 'Only the host can stop sharing');
     this.endShare();

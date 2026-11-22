@@ -9,6 +9,10 @@ export function handleMediaSet(conn: Conn, room: Room, pid: string, msg: Msg<'me
   if (!res.ok) conn.error(res.code, res.message, msg.ref);
 }
 
+export function handleLocalReady(room: Room, pid: string, msg: Msg<'local:ready'>): void {
+  room.localReady(pid, msg.rev, msg.ready);
+}
+
 export function handleMediaEnded(conn: Conn, room: Room, pid: string, msg: Msg<'media:ended'>): void {
   const res = room.mediaFinished(pid, msg.rev, false);
   if (!res.ok) conn.error(res.code, res.message, msg.ref);

@@ -339,6 +339,43 @@ async function main() {
   const closedShare = await sB.waitFor((m) => m.type === 'media:state' && m.media === null, dMark, 2000);
   check(!!closedShare, 'share teardown is broadcast when the sharer socket closes');
 
+  console.log('local file flow');
+  const lfMeta = { name: 'movie.mp4', size: 1234, lastModified: 99, mime: 'video/mp4', durationSec: 60 };
+  const lHost = await mk();
+  const lRoom = await createRoom(lHost);
+  const lGuest = await mk();
+  const lgj = await join(lGuest, lRoom.snapshot.code, 'LG');
+  const lgId = lgj?.type === 'room:joined' ? lgj.selfId : '';
+  const lSet = await lHost.request({ type: 'media:set', media: { kind: 'local', file: lfMeta, delivery: 'same-file' } });
+  check(
+    lSet?.type === 'media:state' && lSet.media?.kind === 'local' && lSet.playback.status === 'paused' && lSet.playback.positionSec === 0,
+    'local media is accepted and starts paused at 0',
+  );
+  const lRev = lSet?.type === 'media:state' && lSet.media ? lSet.media.rev : -1;
+  const lMark = lHost.mark();
+  lGuest.send({ type: 'local:ready', rev: lRev, ready: true });
+  const readyMsg = await lHost.waitFor((m) => m.type === 'participant:updated' && m.participant.id === lgId && m.participant.hasFile === true, lMark);
+  check(!!readyMsg, 'local:ready sets hasFile and broadcasts participant:updated');
+  const lShare = await lHost.request({ type: 'share:start', source: 'file', hasAudio: true, file: lfMeta });
+  check(
+    lShare?.type === 'media:state' && lShare.media?.kind === 'local' && lShare.media.delivery === 'stream' && !!lShare.media.sessionId,
+    'share:start file converts the media to a stream',
+  );
+  const lStop = await lHost.request({ type: 'share:stop' });
+  void lStop;
+  const lLate = await mk();
+  const llj = await join(lLate, lRoom.snapshot.code, 'LL');
+  check(
+    llj?.type === 'room:joined' &&
+      llj.snapshot.media?.kind === 'local' &&
+      llj.snapshot.media.delivery === 'same-file' &&
+      llj.snapshot.participants.find((p) => p.id === lgId)?.hasFile === true,
+    'share:stop falls back to same-file and keeps hasFile',
+  );
+  // The server allows 20 connections per IP and this script keeps every client open, so free these early.
+  for (const c of [lHost, lGuest, lLate]) c.ws.terminate();
+  await sleep(100);
+
   console.log('transport rules');
   const evil = await new Promise<number>((resolve) => {
     const ws = new WebSocket(URL_WS, { origin: 'http://evil.example' });

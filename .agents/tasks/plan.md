@@ -88,13 +88,13 @@ Decisions recorded (design is approved, so none re-decided):
 
 ## P4: Local video and sharing flow
 
-- [ ] P4-1. `src/lib/localfile/{support,hash,verify,captureStream}.ts` with tests for `verifyLocalFile` (hash equal/different, name+size fallback, case difference), `canPlayType` validation.
+- [x] P4-1. `src/lib/localfile/{support,hash,verify,captureStream}.ts` with tests for `verifyLocalFile` (hash equal/different, name+size fallback, case difference), `canPlayType` validation.
       Verify: `npm test`.
-- [ ] P4-2. Server: `media:set` local same-file (initial `paused @ 0`), `local:ready` (current rev only, `hasFile` reset only on file identity change), `share:start file` with meta validation, stream->same-file fallback using stored playback, `playback:command` during stream stored. Tests per section 16 revision 3/4 rows.
+- [x] P4-2. Server: `media:set` local same-file (initial `paused @ 0`), `local:ready` (current rev only, `hasFile` reset only on file identity change), `share:start file` with meta validation, stream->same-file fallback using stored playback, `playback:command` during stream stored. Tests per section 16 revision 3/4 rows.
       Verify: `npm --prefix signaling-server test`.
-- [ ] P4-3. UI: `FileDropzone`, `LocalFilePanel` (explains both flows plainly, caveats for Safari), `LocalPlayer`, `PlayerControls` (play/pause, seek, volume, mute, fullscreen), filename/size/duration, same-file verification prompt for participants, host-controlled sync via `syncController`, stream-from-host through `ShareBroadcaster`/`ShareViewer` with `captureStream` and fallback message; enable Local tab. No blob URL ever sent.
+- [x] P4-3. UI: `FileDropzone`, `LocalFilePanel` (explains both flows plainly, caveats for Safari), `LocalPlayer`, `PlayerControls` (play/pause, seek, volume, mute, fullscreen), filename/size/duration, same-file verification prompt for participants, host-controlled sync via `syncController`, stream-from-host through `ShareBroadcaster`/`ShareViewer` with `captureStream` and fallback message; enable Local tab. No blob URL ever sent.
       Verify: `npm run typecheck; npm run lint; npm test; npm run build`.
-- [ ] P4-4. Extend smoke (local media accepted, `local:ready`, `share:start file`, `share:stop` keeps `hasFile`). Run gate, commit `feat: local video files`.
+- [x] P4-4. Extend smoke (local media accepted, `local:ready`, `share:start file`, `share:stop` keeps `hasFile`). Run gate, commit `feat: local video files`.
 
 ## P5: Chat
 

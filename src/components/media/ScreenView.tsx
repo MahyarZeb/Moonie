@@ -27,7 +27,7 @@ export function ScreenView({ media }: { media: ScreenMedia }) {
           {isSharer ? 'Everyone can see your screen' : `${sharerName} is sharing their screen`}
         </span>
       </div>
-      {isSharer ? <SharerPreview /> : <ViewerScreen media={media} />}
+      {isSharer ? <SharerPreview /> : <ViewerScreen sharerId={media.sharerId} sessionId={media.sessionId} hasAudio={media.hasAudio} />}
     </section>
   );
 }
@@ -65,7 +65,8 @@ function SharerPreview() {
   );
 }
 
-function ViewerScreen({ media }: { media: ScreenMedia }) {
+/** Receives a stream from the sharer over WebRTC. Used for screen shares and for streamed local files. */
+export function ViewerScreen({ sharerId, sessionId, hasAudio }: { sharerId: string; sessionId: string; hasAudio: boolean }) {
   const controller = useRoomController();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -79,8 +80,8 @@ function ViewerScreen({ media }: { media: ScreenMedia }) {
     if (!supported) return;
     const viewer = new ShareViewer({
       transport: controller.transport,
-      sharerId: media.sharerId,
-      sessionId: media.sessionId,
+      sharerId,
+      sessionId,
       onStream: (stream) => {
         if (videoRef.current) videoRef.current.srcObject = stream;
         setHasStream(true);
@@ -93,7 +94,7 @@ function ViewerScreen({ media }: { media: ScreenMedia }) {
       viewer.dispose();
       viewerRef.current = null;
     };
-  }, [controller, media.sharerId, media.sessionId, supported]);
+  }, [controller, sharerId, sessionId, supported]);
 
   if (!supported) {
     return (
@@ -112,7 +113,7 @@ function ViewerScreen({ media }: { media: ScreenMedia }) {
       <video ref={videoRef} autoPlay muted={muted} playsInline className="h-full w-full object-contain" />
       {showVideo && (
         <div className="absolute right-3 top-3 z-20 flex gap-2">
-          {media.hasAudio && (
+          {hasAudio && (
             <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={() => setMuted(!muted)} className="bg-surface/80">
               {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </IconButton>

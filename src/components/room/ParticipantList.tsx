@@ -10,7 +10,7 @@ import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
 const NO_LINKS: Record<string, RTCPeerConnectionState> = {};
 
 function describeLink(state: RTCPeerConnectionState): string {
-  if (state === 'connected') return 'Watching your screen';
+  if (state === 'connected') return 'Watching your stream';
   if (state === 'failed') return "Couldn't connect";
   if (state === 'disconnected') return 'Connection hiccup…';
   return 'Connecting…';
@@ -24,7 +24,9 @@ export function ParticipantList() {
   const links = useSyncExternalStore(share.subscribe, () => share.getState().links, () => NO_LINKS);
   if (!snapshot) return null;
   const isHost = snapshot.hostId === selfId;
-  const sharerId = snapshot.media?.kind === 'screen' ? snapshot.media.sharerId : null;
+  const media = snapshot.media;
+  const sharerId = media?.kind === 'screen' || (media?.kind === 'local' && media.delivery === 'stream') ? (media.sharerId ?? null) : null;
+  const sameFile = media?.kind === 'local' && media.delivery === 'same-file';
   const connected = snapshot.participants.filter((p) => p.connected).length;
 
   return (
@@ -47,7 +49,10 @@ export function ParticipantList() {
                 )}
               </div>
               {!p.connected && <span className="text-xs text-ink-soft">Reconnecting…</span>}
-              {p.connected && p.id === sharerId && <span className="text-xs text-ink-soft">Sharing their screen</span>}
+              {p.connected && p.id === sharerId && <span className="text-xs text-ink-soft">{media?.kind === 'local' ? 'Streaming their video' : 'Sharing their screen'}</span>}
+              {p.connected && sameFile && (
+                <span className="text-xs text-ink-soft">{p.hasFile ? 'Has the file ✓' : 'Needs the file'}</span>
+              )}
               {p.connected && p.id !== selfId && links[p.id] && (
                 <span className="text-xs text-ink-soft">{describeLink(links[p.id]!)}</span>
               )}

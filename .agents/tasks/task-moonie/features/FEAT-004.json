@@ -1,0 +1,11 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "P4: local video files (dropzone, LocalPlayer, controls, hash/verify), same-file flow with sync, captureStream streaming with fallback, explanatory UI. Depends on FEAT-003 (reuses share machinery).",
+  "status": "completed",
+  "steps": ["Do plan.md tasks P4-1 through P4-4 in order (design.md section 10).", "Never send blob URLs or file bytes."],
+  "acceptance_criteria": ["verifyLocalFile tests pass", "Server accepts local media and local:ready; hasFile reset only on file identity change", "UI explains when others must pick the same file", "Phase committed"],
+  "verification": ["npm run typecheck; npm run lint; npm test; npm run build", "npm --prefix signaling-server test; npm --prefix signaling-server run build", "background server + npm --prefix signaling-server run smoke"],
+  "blocked_reason": null,
+  "findings": "Implemented P4-1..P4-4. Server: Room.localReady (current rev + same-file only, no-op repeats, no reply), handler wired; the rest of P4-2 (media:set local, share:start file, stream fallback, playback during stream, hasFile reset by file identity) already existed from earlier phases and now has tests in signaling-server/test/local.test.ts. Client: src/lib/localfile/{support,hash,verify,captureStream,sync,LocalFileStore}.ts, RoomController.localFile, ShareBroadcaster.startFile (source file, contentHint motion), components FileDropzone, PlayerControls, LocalPlayer, LocalStage, LocalFilePanel, Local file tab, ViewerScreen reused for streams, ParticipantList shows Has the file. Gate passed: root typecheck/lint/test (201)/build, server typecheck/test (90)/build, smoke 52/52. Not done: design item 6 (offer Pick the same file instead when a stream link fails repeatedly) and a ShareBroadcaster test for startFile; browser behaviour of captureStream, playbackRate nudging and Safari is UNVERIFIED (no real-browser run)."
+}

@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { ListPlus, Play, MonitorPlay, ScreenShare } from 'lucide-react';
+import { FolderOpen, ListPlus, Play, MonitorPlay, ScreenShare } from 'lucide-react';
 import { Tabs } from '@/components/ui/Tabs';
 import { useRoomController } from '@/lib/room/RoomProvider';
+import { LocalFilePanel } from './LocalFilePanel';
 import { ScreenSharePanel } from './ScreenSharePanel';
 import { YouTubeUrlForm } from './YouTubeUrlForm';
 
-type Source = 'youtube' | 'screen';
+type Source = 'youtube' | 'screen' | 'local';
 
 /**
- * Host-only picker for what the room watches. Only sources that exist are listed:
- * local files join the tabs in their own phase.
+ * Host-only picker for what the room watches: YouTube, a shared screen or a local video file.
  */
 export function SourceSelector() {
   const controller = useRoomController();
@@ -26,10 +26,13 @@ export function SourceSelector() {
         tabs={[
           { id: 'youtube', label: 'YouTube', icon: <MonitorPlay size={16} aria-hidden /> },
           { id: 'screen', label: 'Screen', icon: <ScreenShare size={16} aria-hidden /> },
+          { id: 'local', label: 'Local file', icon: <FolderOpen size={16} aria-hidden /> },
         ]}
       />
       {source === 'screen' ? (
         <ScreenSharePanel />
+      ) : source === 'local' ? (
+        <LocalFilePanel />
       ) : (
       <YouTubeUrlForm
         actions={[

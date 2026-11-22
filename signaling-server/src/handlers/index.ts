@@ -1,7 +1,7 @@
 import type { ClientMessage } from '../../../shared/protocol';
 import { Conn, type HandlerContext } from '../connection';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
-import { handleMediaEnded, handleMediaError, handleMediaSet } from './media';
+import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } from './media';
 import { handlePlayback } from './playback';
 import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder } from './queue';
 import { handleRtcSignal, handleShareStart, handleShareStop } from './share';
@@ -42,6 +42,8 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleKick(conn, room, pid, msg);
     case 'media:set':
       return handleMediaSet(conn, room, pid, msg);
+    case 'local:ready':
+      return handleLocalReady(room, pid, msg);
     case 'media:ended':
       return handleMediaEnded(conn, room, pid, msg);
     case 'media:error':

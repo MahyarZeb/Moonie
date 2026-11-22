@@ -6,6 +6,7 @@ import { useRoom } from '@/lib/room/RoomProvider';
 import { selectIsHost } from '@/lib/room/selectors';
 import { getRoomTheme } from '@/lib/theme/roomThemes';
 import { useVideoTitle } from '@/lib/youtube/useVideoTitle';
+import { LocalStage } from './LocalStage';
 import { ScreenView } from './ScreenView';
 import { SourceSelector } from './SourceSelector';
 import { YouTubePlayer, type YouTubeMedia } from './YouTubePlayer';
@@ -24,6 +25,8 @@ export function MediaStage() {
         </>
       ) : media?.kind === 'screen' ? (
         <ScreenView key={media.sessionId} media={media} />
+      ) : media?.kind === 'local' ? (
+        <LocalStage key={`${media.file.name}|${media.file.size}|${media.file.lastModified}`} media={media} />
       ) : (
         <EmptyStage />
       )}
@@ -60,7 +63,7 @@ function EmptyStage() {
         </h2>
         <p className="mt-2 text-ink-soft">
           {isHost
-            ? 'You are the host. Paste a YouTube link or share your screen below to start watching together.'
+            ? 'You are the host. Paste a YouTube link, share your screen or pick a video file below to start watching together.'
             : 'Nothing is playing yet. Add a YouTube link in the Queue tab, or wait for the host to pick something.'}
         </p>
       </motion.div>
