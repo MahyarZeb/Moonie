@@ -1,0 +1,7 @@
+{
+  "task_id": "task-moonie",
+  "task_description": "Build Moonie, a no-auth no-DB watch party site: Next.js App Router app at repo root (Vercel) plus a ws signaling server in signaling-server/. Phases P1..P7 from brief.md, then final verification P8. Detailed steps in .agents/tasks/plan.md; contract in design.md sections 4, 6, 9.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005", "FEAT-006", "FEAT-007", "FEAT-008"],
+  "blocked_reason": null
+}

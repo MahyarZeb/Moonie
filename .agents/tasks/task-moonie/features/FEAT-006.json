@@ -1,0 +1,22 @@
+{
+    "id":  "FEAT-006",
+    "type":  "feat",
+    "description":  "P6: shared pure reducers for Ludo, Tic-Tac-Toe, RPS with tests first, server handlers with per-recipient redaction, and pastel UIs. Depends on FEAT-001.",
+    "status":  "completed",
+    "steps":  [
+                  "Do plan.md tasks P6-1 through P6-4 in order (design.md section 12).",
+                  "THREE_SIXES_FORFEIT is the single switch; mention the house rule in games help text (review note 6)."
+              ],
+    "acceptance_criteria":  [
+                                "All reducer tests pass (TTT lines/draw, RPS 27 triples, Ludo rules, parseGameAction garbage)",
+                                "Smoke: illegal and garbage game actions rejected without state change; RPS picks hidden from other clients before reveal",
+                                "Phase committed"
+                            ],
+    "verification":  [
+                         "npm run typecheck; npm run lint; npm test; npm run build",
+                         "npm --prefix signaling-server test; npm --prefix signaling-server run build",
+                         "background server + npm --prefix signaling-server run smoke"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "Pure reducers (ludo, tictactoe, rps) in shared/games with tests; parseGameAction shapes; server game:open/close/action handlers with per-recipient redaction (Room.gameState + viewGame), server rng, Ludo turn-skip sweep, leave/forfeit; Games tab UI (picker, Ludo SVG board, dice, seats, TTT, RPS, winner banners, help incl. three-sixes house rule). Added LudoState.lastRoll (dice value kept after auto-pass) and optional Result.code=\u0027forbidden\u0027. Gate: typecheck, lint, root tests (249), build, server typecheck/tests (103)/build, smoke 80/80 all green."
+}

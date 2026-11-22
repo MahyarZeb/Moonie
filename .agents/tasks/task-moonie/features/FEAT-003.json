@@ -1,0 +1,23 @@
+﻿{
+    "id":  "FEAT-003",
+    "type":  "feat",
+    "description":  "P3: screen share over WebRTC (PeerLink perfect negotiation, ShareBroadcaster/Viewer, server share:* and targeted rtc:signal relay, endShare on all triggers). Depends on FEAT-002.",
+    "status":  "completed",
+    "steps":  [
+                  "Do plan.md tasks P3-1 through P3-4 in order (design.md section 9 is the contract).",
+                  "Include createOffer/createAnswer fallback in PeerLink (review note 5).",
+                  "Smoke must assert old host socket gets media:state with media null after host:transfer (review note 2)."
+              ],
+    "acceptance_criteria":  [
+                                "Fake-RTCPeerConnection tests pass: retry link identity, stale linkId ignored, store-driven teardown",
+                                "Smoke: rtc:signal reaches only its target; viewer-to-viewer dropped; teardown broadcasts on transfer and sharer socket close",
+                                "Phase committed"
+                            ],
+    "verification":  [
+                         "npm run typecheck; npm run lint; npm test; npm run build",
+                         "npm --prefix signaling-server test; npm --prefix signaling-server run build",
+                         "background server + npm --prefix signaling-server run smoke"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "P3 done. Server: share:start (screen, plus file-stream conversion per design 6)/share:stop, targeted rtc:signal relay (active session, sharer\u003c-\u003eviewer only, drops silent), shared hasFile reset helper. Client: src/lib/webrtc (iceConfig, support, capture, PeerLink with createOffer/createAnswer fallback and ICE restart, ShareBroadcaster store-driven teardown, ShareViewer with fresh linkId per viewer-ready), RoomController.share + notifier, ScreenSharePanel/ScreenView/LiveBadge, Screen tab in SourceSelector, link state on People tab. Gate: typecheck, lint, root tests 180 pass, build ok, server tests 84 pass, server build ok, smoke 48/48 incl. review note 2 (old host gets media:state media:null after host:transfer). Not verified: real browser/cross-network WebRTC, bitrate cap, TURN. Note: shell env had PORT=8791 so server and smoke used 8791."
+}

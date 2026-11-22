@@ -1,0 +1,15 @@
+{
+  "project_type": "Greenfield: Next.js App Router (Vercel, repo root) + standalone Node ws signaling server in signaling-server/ + pure TS shared/ module",
+  "language": "TypeScript (strict)",
+  "build_system": "npm (no workspaces). Root: next build. Server: esbuild bundle to signaling-server/dist/server.js (CJS, ws external; build tools in dependencies). Tailwind pinned 3.4.x. Scaffolding hand-written (no create-next-app, repo not empty). Fonts: next/font/google, fall back to next/font/local with committed woff2 if offline build fails (decided in P1).",
+  "test_framework": "vitest at root (excludes signaling-server/**) and in signaling-server; ws-based smoke script signaling-server/scripts/smoke.ts run via tsx",
+  "build_command": "npm run build; npm --prefix signaling-server run build",
+  "test_command": "npm run typecheck; npm run lint; npm test; npm --prefix signaling-server run typecheck; npm --prefix signaling-server test",
+  "verification_instructions": "Per-phase gate: root typecheck, lint, test, build; server typecheck, test, build; from P1 start server in background (HOST_GRACE_MS=500 SWEEP_INTERVAL_MS=100 IDLE_MS=1000 ALLOWED_ORIGINS set), run npm --prefix signaling-server run smoke, stop the process. Commit per phase. Final: P8 in plan.md, writing .agents/tasks/verification.md.",
+  "snapshot_or_generated_files": "package-lock.json files are committed. dist/, .next/ are ignored. Optional screenshots in .agents/tasks/screenshots/.",
+  "environment_constraints": "Windows + PowerShell: use ';' not '&&'. Never run servers in the foreground; use Start-Process / background and stop them (record PIDs). Node 24, npm 11. No network in authoring env previously: verify package versions with npm view at install time. Work on the current branch directly (no worktree). Never push.",
+  "contribution_requirements": "No DB, auth, permanent storage. No hardcoded localhost in app code (only .env.example, .env.development, signaling-server/src/dev.ts). No placeholders or fake buttons: do not render a tab/control until its feature exists. Modular code, minimal deps. Conventional Commits.",
+  "key_patterns": "Server-authoritative room state. Shared pure reducers in shared/games used by server and client. Request/reply contract with ref (design section 4). rtc:signal carries sessionId and linkId. Client store: pure roomReducer over ServerMessage. SignalingTransport interface is the replaceable seam. THREE_SIXES_FORFEIT single switch in shared/games/ludo.ts.",
+  "relevant_files": [".agents/tasks/brief.md", ".agents/tasks/design.md", ".agents/tasks/design-review.md", ".agents/tasks/plan.md"],
+  "directory_structure": "shared/ (protocol, validate, constants, roomCode, playback, clock, games/), signaling-server/{src,scripts,test}, src/app (routes), src/components/{ui,landing,room,media,chat,games}, src/lib/{signaling,room,youtube,webrtc,localfile,identity,theme,utils}. Full tree in design.md section 3."
+}
