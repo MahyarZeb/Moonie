@@ -254,7 +254,9 @@ async function main() {
   );
 
   const q1 = await yGuest.request({ type: 'queue:add', videoId: V2, title: 'Second' });
-  check(q1?.type === 'queue:updated' && q1.queue.length === 1, 'queue:add replies queue:updated with the item');
+  check(q1?.type === 'suggestions:updated' && q1.suggestions.length === 1, 'a member queue:add becomes a suggestion');
+  const approved = await yHost.request({ type: 'queue:approve', itemId: q1?.type === 'suggestions:updated' ? (q1.suggestions[0]?.id ?? '') : '' });
+  check(approved?.type === 'queue:updated' && approved.queue.length === 1, 'queue:approve moves it into the queue');
   const q2 = await yHost.request({ type: 'queue:add', videoId: V3 });
   check(q2?.type === 'queue:updated' && q2.queue.length === 2, 'host can queue another video');
   const dupAdd = await yHost.request({ type: 'queue:add', videoId: V3 });
