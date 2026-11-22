@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { Armchair, MonitorPlay } from 'lucide-react';
 import { useRoom } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectIsController } from '@/lib/room/selectors';
 import { getRoomTheme } from '@/lib/theme/roomThemes';
 import { useVideoTitle } from '@/lib/youtube/useVideoTitle';
 import { LocalStage } from './LocalStage';
@@ -14,13 +14,13 @@ import { YouTubePlayer, type YouTubeMedia } from './YouTubePlayer';
 /** The main player area: the current media on top and, for the host, the source selector below. */
 export function MediaStage() {
   const media = useRoom((s) => s.snapshot?.media ?? null);
-  const isHost = useRoom(selectIsHost);
+  const isHost = useRoom(selectIsController);
 
   return (
     <div className="space-y-4">
       {media?.kind === 'youtube' ? (
         <>
-          <YouTubePlayer key={isHost ? 'host' : 'follower'} media={media} />
+          <YouTubePlayer key={isHost ? 'controller' : 'follower'} media={media} />
           <NowPlaying media={media} />
         </>
       ) : media?.kind === 'screen' ? (
@@ -47,7 +47,7 @@ function NowPlaying({ media }: { media: YouTubeMedia }) {
 
 function EmptyStage() {
   const theme = useRoom((s) => s.snapshot?.theme);
-  const isHost = useRoom(selectIsHost);
+  const isHost = useRoom(selectIsController);
   const info = getRoomTheme(theme);
 
   return (

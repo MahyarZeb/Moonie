@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ListPlus, Play, X } from 'lucide-react';
 import type { QueueItem } from '@shared/protocol';
 import { IconButton } from '@/components/ui/IconButton';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectIsController } from '@/lib/room/selectors';
 import { thumbnailUrl } from '@/lib/youtube/parse';
 import { useVideoTitle } from '@/lib/youtube/useVideoTitle';
 import { YouTubeUrlForm } from './YouTubeUrlForm';
@@ -16,7 +16,7 @@ export function QueuePanel() {
   const queue = useRoom((s) => s.snapshot?.queue);
   const names = useRoom((s) => s.snapshot?.participants);
   const selfId = useRoom((s) => s.selfId);
-  const isHost = useRoom(selectIsHost);
+  const isHost = useRoom(selectIsController);
   const send = (msg: Parameters<typeof controller.transport.send>[0]) => controller.transport.send(msg);
 
   return (

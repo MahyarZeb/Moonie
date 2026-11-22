@@ -8,7 +8,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { formatBytes } from '@/lib/localfile/support';
 import { verifyLocalFile, type VerifyState } from '@/lib/localfile/verify';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectIsController } from '@/lib/room/selectors';
 import { formatDuration } from '@/lib/utils/format';
 import { FileDropzone } from './FileDropzone';
 import { LocalPlayer, type LocalMedia } from './LocalPlayer';
@@ -20,7 +20,7 @@ import { ViewerScreen } from './ScreenView';
  */
 export function LocalStage({ media }: { media: LocalMedia }) {
   const controller = useRoomController();
-  const isHost = useRoom(selectIsHost);
+  const isHost = useRoom(selectIsController);
   const selfId = useRoom((s) => s.selfId);
   const store = controller.localFile;
   const lf = useSyncExternalStore(store.subscribe, store.getState, store.getState);

@@ -704,7 +704,7 @@ export class Room {
     const m = this.media;
     if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
     if (cmd.rev !== m.rev) return fail('stale', 'That command was for an earlier video');
-    this.playback = applyCommand(this.playback, cmd, this.clock.now());
+    this.playback = applyCommand(this.playback, cmd, this.clock.now(), actorId);
     this.publishPlayback(actorId, ref);
     return { ok: true };
   }

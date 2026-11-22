@@ -65,9 +65,9 @@ export function LocalPlayer({ media, url, isHost }: Props) {
     return () => store.setElement(null);
   }, [controller, url]);
 
-  // Follower: keep aligned with the host.
+  // Followers poll every second. Controllers (host and co-hosts) only apply changes made by someone else,
+  // so their own actions are not fought by the loop and not echoed back.
   useEffect(() => {
-    if (isHost) return;
     const sync = new LocalFollowerSync({
       getVideo: () => videoRef.current,
       getPlayback: () => controller.store.getState().snapshot!.playback,
@@ -75,14 +75,18 @@ export function LocalPlayer({ media, url, isHost }: Props) {
       onAutoplayBlocked: setBlocked,
     });
     syncRef.current = sync;
-    sync.start();
+    if (!isHost) sync.start();
     let last = controller.store.getState().snapshot?.playback;
     const off = controller.store.subscribe(() => {
-      const pb = controller.store.getState().snapshot?.playback;
-      if (pb && pb !== last) {
-        last = pb;
-        sync.sync();
+      const { snapshot, selfId } = controller.store.getState();
+      const pb = snapshot?.playback;
+      if (!pb || pb === last) return;
+      last = pb;
+      if (isHost) {
+        if (pb.by === selfId) return;
+        suppressUntil.current = Date.now() + SUPPRESS_MS;
       }
+      sync.sync();
     });
     return () => {
       off();

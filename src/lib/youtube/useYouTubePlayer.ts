@@ -7,8 +7,8 @@ import type { YTPlayer } from './types';
 export type PlayerStatus = 'loading' | 'ready' | 'error';
 
 export interface UseYouTubePlayerOptions {
-  /** Hosts get the native YouTube controls; followers are driven by the sync loop. */
-  isHost: boolean;
+  /** Controllers (host and co-hosts) get the native YouTube controls; followers are driven by the sync loop. */
+  canControl: boolean;
   onStateChange: (state: number) => void;
   onError: (code: number) => void;
 }
@@ -24,7 +24,7 @@ export interface UseYouTubePlayerResult {
  * Creates one YT.Player for the lifetime of the component (and per host/follower mode).
  * Videos are loaded into it by the caller with `loadVideoById`, so it is never rebuilt on re-render.
  */
-export function useYouTubePlayer({ isHost, onStateChange, onError }: UseYouTubePlayerOptions): UseYouTubePlayerResult {
+export function useYouTubePlayer({ canControl, onStateChange, onError }: UseYouTubePlayerOptions): UseYouTubePlayerResult {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const [status, setStatus] = useState<PlayerStatus>('loading');
@@ -52,8 +52,8 @@ export function useYouTubePlayer({ isHost, onStateChange, onError }: UseYouTubeP
             playsinline: 1,
             rel: 0,
             modestbranding: 1,
-            controls: isHost ? 1 : 0,
-            disablekb: isHost ? 0 : 1,
+            controls: canControl ? 1 : 0,
+            disablekb: canControl ? 0 : 1,
             fs: 0,
           },
           events: {
@@ -79,7 +79,7 @@ export function useYouTubePlayer({ isHost, onStateChange, onError }: UseYouTubeP
         /* the iframe is already gone */
       }
     };
-  }, [isHost, attempt]);
+  }, [canControl, attempt]);
 
   const retry = useCallback(() => {
     setStatus('loading');

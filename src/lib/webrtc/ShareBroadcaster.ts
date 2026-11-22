@@ -1,5 +1,6 @@
 import type { LocalFileMeta, MediaState, ServerMessage } from '@shared/protocol';
 import type { RoomStore } from '@/lib/room/roomStore';
+import { selectIsController } from '@/lib/room/selectors';
 import { TransportError, type SignalingTransport } from '@/lib/signaling/types';
 import { startDisplayCapture, type CaptureFailure, type CaptureResult } from './capture';
 import { PeerLink, type PeerConnectionFactory } from './PeerLink';
@@ -185,9 +186,9 @@ export class ShareBroadcaster {
       return;
     }
     if (!this.seenOwn) return;
-    const stillHost = !!s.snapshot && s.snapshot.hostId === s.selfId;
+    const stillHost = selectIsController(s);
     const what = this.kind === 'file' ? 'Streaming' : 'Screen sharing';
-    this.teardown(!s.snapshot || stillHost ? `${what} ended` : `${what} ended because someone else is host now`);
+    this.teardown(!s.snapshot || stillHost ? `${what} ended` : `${what} ended because you are no longer a host or co-host`);
   };
 
   private pruneLinks(): void {

@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import type { GameView } from '@shared/games/types';
 import { IconButton } from '@/components/ui/IconButton';
 import { useRoom } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectIsController } from '@/lib/room/selectors';
 import { GameHelp } from './GameHelp';
 import { GamePicker } from './GamePicker';
 import { LudoGame } from './ludo/LudoGame';
@@ -24,7 +24,7 @@ function seatedIds(g: GameView): string[] {
 export function GamesPanel() {
   const game = useRoom((s) => s.snapshot?.game ?? null);
   const selfId = useRoom((s) => s.selfId);
-  const isHost = useRoom(selectIsHost);
+  const isHost = useRoom(selectIsController);
   const { close } = useGameActions();
 
   if (!game) return <GamePicker />;

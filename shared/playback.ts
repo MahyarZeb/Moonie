@@ -22,9 +22,9 @@ export interface PlaybackCommand {
  * `updatedAt` is the host's measurement time clamped to `[now - 2 s, now]`, which removes the
  * host's uplink delay from the timeline without trusting a wild timestamp.
  */
-export function applyCommand(playback: PlaybackState, cmd: PlaybackCommand, now: number): PlaybackState {
+export function applyCommand(playback: PlaybackState, cmd: PlaybackCommand, now: number, by?: string): PlaybackState {
   const measured = cmd.hostServerTime ?? now;
   const updatedAt = Math.min(now, Math.max(now - MAX_HOST_LAG_MS, measured));
   const status = cmd.action === 'play' ? 'playing' : cmd.action === 'pause' ? 'paused' : playback.status;
-  return { rev: playback.rev, status, positionSec: cmd.positionSec, updatedAt };
+  return { rev: playback.rev, status, positionSec: cmd.positionSec, updatedAt, ...(by ? { by } : {}) };
 }

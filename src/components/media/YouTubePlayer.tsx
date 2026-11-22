@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Spinner } from '@/components/ui/Spinner';
 import { serverNow } from '@/lib/room/clockSync';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectIsController } from '@/lib/room/selectors';
 import { describeYouTubeError } from '@/lib/youtube/errors';
 import { detectSeek, FollowerSync } from '@/lib/youtube/syncController';
 import { YT_STATE } from '@/lib/youtube/types';
@@ -22,12 +22,14 @@ const SUPPRESS_MS = 750;
 
 /**
  * Plays the room's YouTube video with the official IFrame API.
- * The host drives playback (its commands go to the server); followers are corrected by `FollowerSync`.
- * Mount it with `key={isHost}` so the player is rebuilt with the right controls when the host changes.
+ * Hosts and co-hosts (controllers) drive playback with native controls; their commands go to the server.
+ * Everyone else is corrected continuously by `FollowerSync`. A controller applies a remote change only when it
+ * was made by someone else (`playback.by`) and mutes its own echo for `SUPPRESS_MS`, so two controllers cannot loop.
+ * Mount it with `key={canControl}` so the player is rebuilt with the right controls when the role changes.
  */
 export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
   const controller = useRoomController();
-  const isHost = useRoom(selectIsHost);
+  const canControl = useRoom(selectIsController);
   const [loadedRev, setLoadedRev] = useState<number | null>(null);
   const [error, setError] = useState<{ rev: number; code: number } | null>(null);
   const [blocked, setBlocked] = useState(false);
@@ -39,7 +41,7 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
   const lastPoll = useRef({ pos: 0, at: 0, quietUntil: 0 });
 
   const { containerRef, playerRef, status, retry } = useYouTubePlayer({
-    isHost,
+    canControl,
     onStateChange: (state) => handleState(state),
     onError: (code) => handleError(code),
   });
@@ -74,7 +76,7 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
     if (state === YT_STATE.PLAYING || state === YT_STATE.PAUSED || state === YT_STATE.CUED) {
       if (loadedRevRef.current === m.rev) setLoadedRev(m.rev);
     }
-    if (!isHost) {
+    if (!canControl) {
       syncRef.current?.noteState(state);
       if (!syncRef.current?.suppressed) syncRef.current?.sync();
       return;
@@ -91,7 +93,7 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
     const m = currentMedia();
     if (!m) return;
     setError({ rev: m.rev, code });
-    if (isHost) controller.transport.send({ type: 'media:error', rev: m.rev, code });
+    if (canControl) controller.transport.send({ type: 'media:error', rev: m.rev, code });
   }
 
   // Load (or cue, when the room is paused) whenever the media revision changes.
@@ -109,9 +111,10 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
     else player.loadVideoById({ videoId: media.videoId, startSeconds: start });
   }, [status, media.rev, media.videoId, controller, playerRef]);
 
-  // Follower: keep aligned with the host.
+  // Keep aligned with the room. Followers poll every second. Controllers only apply changes made by someone else,
+  // so their own native-control actions are never fought by the loop.
   useEffect(() => {
-    if (isHost || status !== 'ready') return;
+    if (status !== 'ready') return;
     const sync = new FollowerSync({
       getPlayer: () => playerRef.current,
       getPlayback: () => controller.store.getState().snapshot!.playback,
@@ -119,25 +122,30 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
       onAutoplayBlocked: setBlocked,
     });
     syncRef.current = sync;
-    sync.start();
+    if (!canControl) sync.start();
     let last = controller.store.getState().snapshot?.playback;
     const off = controller.store.subscribe(() => {
-      const pb = controller.store.getState().snapshot?.playback;
-      if (pb && pb !== last) {
-        last = pb;
-        sync.sync();
+      const { snapshot, selfId } = controller.store.getState();
+      const pb = snapshot?.playback;
+      if (!pb || pb === last) return;
+      last = pb;
+      if (canControl) {
+        if (pb.by === selfId) return;
+        // Applying someone else's change must not echo back as our own command.
+        hostSuppressUntil.current = Date.now() + SUPPRESS_MS;
       }
+      sync.sync();
     });
     return () => {
       off();
       sync.stop();
       syncRef.current = null;
     };
-  }, [isHost, status, controller, playerRef]);
+  }, [canControl, status, controller, playerRef]);
 
-  // Host: detect seeks from the native controls.
+  // Controller: detect seeks from the native controls.
   useEffect(() => {
-    if (!isHost || status !== 'ready') return;
+    if (!canControl || status !== 'ready') return;
     const timer = setInterval(() => {
       const player = playerRef.current;
       if (!player) return;
@@ -155,7 +163,7 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
     return () => clearInterval(timer);
     // sendCommand only reads refs and the store, so it is safe to leave out.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, status, controller, playerRef]);
+  }, [canControl, status, controller, playerRef]);
 
   const toggleMute = () => {
     const player = playerRef.current;
@@ -178,10 +186,10 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
   return (
     <div ref={wrapperRef} className="relative aspect-video w-full overflow-hidden rounded-3xl bg-black/80">
       <div ref={containerRef} className="absolute inset-0 [&>iframe]:h-full [&>iframe]:w-full" />
-      {!isHost && <div className="absolute inset-0" aria-hidden />}
+      {!canControl && <div className="absolute inset-0" aria-hidden />}
 
       <div className="absolute right-3 top-3 z-20 flex gap-2">
-        {!isHost && (
+        {!canControl && (
           <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} className="bg-surface/80">
             {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </IconButton>
@@ -214,12 +222,12 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
           <AlertTriangle aria-hidden />
           <p className="font-bold">{describeYouTubeError(playerError.code)}</p>
           <p className="text-sm text-ink-soft">
-            {isHost ? 'Moving on to the next video if there is one. You can also pick another below.' : 'The host will pick something else.'}
+            {canControl ? 'Moving on to the next video if there is one. You can also pick another below.' : 'The host will pick something else.'}
           </p>
         </Overlay>
       )}
 
-      {blocked && !isHost && (
+      {blocked && !canControl && (
         <Overlay>
           <p className="text-2xl" aria-hidden>
             🍿

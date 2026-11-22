@@ -141,6 +141,9 @@ describe('roles: co-host abilities', () => {
     expect(room.playback.status).toBe('paused');
     expect(await codeOf(t, co, { type: 'playback:command', rev, action: 'seek', positionSec: 30 })).toBeUndefined();
     expect(room.playback.positionSec).toBe(30);
+    expect(room.playback.by).toBe(co.id);
+    await t.send(host.conn, { type: 'playback:command', rev, action: 'seek', positionSec: 30 });
+    expect(room.playback.by).toBe(host.id);
 
     expect(await codeOf(t, m1, { type: 'playback:command', rev, action: 'play', positionSec: 0 })).toBe('not_host');
     expect(await codeOf(t, m1, { type: 'media:set', media: { kind: 'youtube', videoId: V2 } })).toBe('not_host');

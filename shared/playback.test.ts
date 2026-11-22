@@ -39,3 +39,10 @@ describe('applyCommand', () => {
     expect(applyCommand(base, { action: 'play', positionSec: 1, hostServerTime: 99999 }, 5000).updatedAt).toBe(5000);
   });
 });
+
+describe('applyCommand by', () => {
+  it('stamps the actor id and omits it when absent', () => {
+    expect(applyCommand(base, { action: 'pause', positionSec: 1 }, 5000, 'p1').by).toBe('p1');
+    expect('by' in applyCommand(base, { action: 'pause', positionSec: 1 }, 5000)).toBe(false);
+  });
+});

@@ -59,6 +59,8 @@ export interface PlaybackState {
   positionSec: number;
   /** Server epoch ms. */
   updatedAt: number;
+  /** Participant id of the last playback command. Lets a controller ignore its own echo. */
+  by?: string;
 }
 
 export interface QueueItem {
