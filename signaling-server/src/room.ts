@@ -186,6 +186,33 @@ export class Room {
     this.broadcast({ type: 'chat:message', message });
   }
 
+  /** Appends a user message (text already sanitized) and broadcasts it to everyone, sender included. */
+  addChat(fromId: string, text: string): void {
+    const sp = this.participants.get(fromId);
+    if (!sp) return;
+    const message: ChatMessage = {
+      id: randomUUID(),
+      kind: 'user',
+      from: fromId,
+      name: sp.participant.name,
+      avatar: sp.participant.avatar,
+      text,
+      ts: this.clock.now(),
+    };
+    this.chat.push(message);
+    if (this.chat.length > LIMITS.chatHistory) this.chat.splice(0, this.chat.length - LIMITS.chatHistory);
+    sp.typing = false;
+    this.broadcast({ type: 'chat:message', message });
+  }
+
+  /** Relays a typing flag to everyone except the typist. */
+  setTyping(id: string, typing: boolean): void {
+    const sp = this.participants.get(id);
+    if (!sp || sp.typing === typing) return;
+    sp.typing = typing;
+    this.broadcast({ type: 'chat:typing', id, typing }, id);
+  }
+
   touch(): void {
     this.lastActiveAt = this.clock.now();
   }
@@ -260,7 +287,10 @@ export class Room {
     const sp = this.participants.get(id);
     if (!sp || sp.socket !== socket) return;
     sp.socket = null;
-    sp.typing = false;
+    if (sp.typing) {
+      sp.typing = false;
+      this.broadcast({ type: 'chat:typing', id, typing: false }, id);
+    }
     sp.participant.connected = false;
     sp.disconnectedAt = this.clock.now();
     if (this.shareSession?.sharerId === id) this.endShare();

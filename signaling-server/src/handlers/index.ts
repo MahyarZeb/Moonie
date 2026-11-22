@@ -1,5 +1,6 @@
 import type { ClientMessage } from '../../../shared/protocol';
 import { Conn, type HandlerContext } from '../connection';
+import { handleChatSend, handleChatTyping } from './chat';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
 import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } from './media';
 import { handlePlayback } from './playback';
@@ -64,6 +65,10 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleShareStop(conn, room, pid, msg);
     case 'rtc:signal':
       return handleRtcSignal(ctx, room, pid, msg);
+    case 'chat:send':
+      return handleChatSend(room, pid, msg);
+    case 'chat:typing':
+      return handleChatTyping(room, pid, msg);
     default:
       return conn.error('bad_request', 'This message is not supported yet', msg.ref);
   }

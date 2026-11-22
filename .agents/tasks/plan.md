@@ -98,11 +98,11 @@ Decisions recorded (design is approved, so none re-decided):
 
 ## P5: Chat
 
-- [ ] P5-1. Server chat handlers: sanitize (trim, strip control chars, newlines to a space, 500 cap), ring buffer 100, broadcast to all incl. sender, typing, system join/leave lines, rate limit. Tests.
+- [x] P5-1. Server chat handlers: sanitize (trim, strip control chars, newlines to a space, 500 cap), ring buffer 100, broadcast to all incl. sender, typing, system join/leave lines, rate limit. Tests.
       Verify: `npm --prefix signaling-server test`.
-- [ ] P5-2. UI `src/components/chat/*` (ChatPanel, MessageList with auto-scroll and "jump to latest", MessageBubble, ChatInput, EmojiPicker static array, TypingIndicator), online count, unread badge on Chat tab, mobile tab. Reducer tests for typing expiry and chat history.
+- [x] P5-2. UI `src/components/chat/*` (ChatPanel, MessageList with auto-scroll and "jump to latest", MessageBubble, ChatInput, EmojiPicker static array, TypingIndicator), online count, unread badge on Chat tab, mobile tab. Reducer tests for typing expiry and chat history.
       Verify: `npm run typecheck; npm run lint; npm test; npm run build`.
-- [ ] P5-3. Extend smoke (chat broadcast to all, history in late-joiner snapshot, truncation at 500, join/leave system lines). Run gate, commit `feat: live chat`.
+- [x] P5-3. Extend smoke (chat broadcast to all, history in late-joiner snapshot, truncation at 500, join/leave system lines). Run gate, commit `feat: live chat`.
 
 ## P6: Games
 

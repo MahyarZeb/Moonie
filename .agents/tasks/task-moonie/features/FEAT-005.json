@@ -1,0 +1,11 @@
+{
+  "id": "FEAT-005",
+  "type": "feat",
+  "description": "P5: live chat (server sanitize, ring buffer, typing, system lines; ChatPanel, emoji picker, unread badge, auto-scroll). Independent of FEAT-003/004 but ordered after them. Depends on FEAT-001.",
+  "status": "completed",
+  "steps": ["Do plan.md tasks P5-1 through P5-3 in order (design.md section 11)."],
+  "acceptance_criteria": ["Chat is broadcast to all including sender, truncated at 500, control chars stripped", "Late joiner snapshot has last chat messages", "Phase committed"],
+  "verification": ["npm run typecheck; npm run lint; npm test; npm run build", "npm --prefix signaling-server test; npm --prefix signaling-server run build", "background server + npm --prefix signaling-server run smoke"],
+  "blocked_reason": null,
+  "findings": "Server: Room.addChat/setTyping + handlers/chat.ts (sanitize already in shared/validate; ring buffer 100; broadcast incl. sender; typing relayed to others and cleared on disconnect). UI: src/components/chat/* , Chat tab first in Sidebar and mobile bar, unread badge via lib/room/unread.ts. Tests: server chat.test.ts, unread.test.ts; smoke extended (59/59). Root typecheck/lint/test/build and server typecheck/test/build all pass."
+}

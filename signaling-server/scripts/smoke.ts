@@ -283,6 +283,48 @@ async function main() {
   const rmReply = await yHost.request({ type: 'queue:remove', itemId: queued[0]?.id ?? '' });
   check(rmReply?.type === 'queue:updated' && rmReply.queue.length === 0, 'queue:remove empties the queue');
 
+  console.log('chat');
+  const cHost = await mk();
+  const cRoom = await createRoom(cHost);
+  const cGuest = await mk();
+  await join(cGuest, cRoom.snapshot.code, 'Chatty');
+  const cMark = cHost.mark();
+  const cgMark = cGuest.mark();
+  cGuest.send({ type: 'chat:send', text: 'hello moonie' });
+  const isHello = (m: Msg) => m.type === 'chat:message' && m.message.text === 'hello moonie';
+  const hostGot = await cHost.waitFor(isHello, cMark);
+  const senderGot = await cGuest.waitFor(isHello, cgMark);
+  check(!!hostGot && !!senderGot, 'chat:send is broadcast to everyone including the sender');
+  check(
+    senderGot?.type === 'chat:message' && senderGot.message.kind === 'user' && senderGot.message.name === 'Chatty' && !!senderGot.message.avatar,
+    'chat message carries sender name and avatar',
+  );
+  const longMark = cHost.mark();
+  cGuest.send({ type: 'chat:send', text: `a\u0000b\nc${'z'.repeat(700)}` });
+  const longMsg = await cHost.waitFor((m) => m.type === 'chat:message' && m.message.text.startsWith('ab c'), longMark);
+  check(
+    longMsg?.type === 'chat:message' && longMsg.message.text.length === 500 && !/[\u0000-\u001f]/.test(longMsg.message.text),
+    'chat text is truncated at 500 with control chars stripped',
+  );
+  const typMark = cHost.mark();
+  cGuest.send({ type: 'chat:typing', typing: true });
+  check(!!(await cHost.waitFor((m) => m.type === 'chat:typing' && m.typing, typMark)), 'typing is relayed to others');
+  const cLate = await mk();
+  const cLateJoin = await join(cLate, cRoom.snapshot.code, 'LateChat');
+  check(
+    cLateJoin?.type === 'room:joined' && cLateJoin.snapshot.chat.some((m) => m.text === 'hello moonie'),
+    'late joiner snapshot has recent chat messages',
+  );
+  check(
+    cLateJoin?.type === 'room:joined' && cLateJoin.snapshot.chat.some((m) => m.kind === 'system' && m.text.includes('Chatty joined')),
+    'join system line is in chat history',
+  );
+  const leaveMark = cHost.mark();
+  cGuest.send({ type: 'room:leave' });
+  check(
+    !!(await cHost.waitFor((m) => m.type === 'chat:message' && m.message.kind === 'system' && m.message.text.includes('Chatty left'), leaveMark)),
+    'leave system line is broadcast',
+  );
   console.log('host migration while playing');
   const mpHost = await mk();
   const mpRoom = await createRoom(mpHost);

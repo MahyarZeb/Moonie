@@ -1,19 +1,20 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ListVideo, Tv, Users } from 'lucide-react';
+import { ListVideo, MessageCircle, Tv, Users } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
-export type MobileTab = 'watch' | 'people' | 'queue';
+export type MobileTab = 'watch' | 'chat' | 'people' | 'queue';
 
 const TABS: { id: MobileTab; label: string; icon: ReactNode }[] = [
   { id: 'watch', label: 'Watch', icon: <Tv size={20} /> },
+  { id: 'chat', label: 'Chat', icon: <MessageCircle size={20} /> },
   { id: 'people', label: 'People', icon: <Users size={20} /> },
   { id: 'queue', label: 'Queue', icon: <ListVideo size={20} /> },
 ];
 
 /** Bottom tab bar for phones. Panels are shown one at a time. Hidden from the lg breakpoint up. */
-export function MobileTabBar({ value, onChange }: { value: MobileTab; onChange: (tab: MobileTab) => void }) {
+export function MobileTabBar({ value, onChange, unread = 0 }: { value: MobileTab; onChange: (tab: MobileTab) => void; unread?: number }) {
   return (
     <nav
       aria-label="Room sections"
@@ -30,7 +31,14 @@ export function MobileTabBar({ value, onChange }: { value: MobileTab; onChange: 
             value === t.id ? 'text-purple' : 'text-ink-soft',
           )}
         >
-          {t.icon}
+          <span className="relative">
+            {t.icon}
+            {t.id === 'chat' && unread > 0 && (
+              <span aria-label={` unread`} className="absolute -right-3 -top-1.5 min-w-4 rounded-full bg-pink px-1 text-center text-[10px] leading-4 text-ink">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </span>
           {t.label}
         </button>
       ))}
