@@ -7,6 +7,7 @@ import { GamesPanel } from '@/components/games/GamesPanel';
 import { QueuePanel } from '@/components/media/QueuePanel';
 import { Tabs } from '@/components/ui/Tabs';
 import { useRoom } from '@/lib/room/RoomProvider';
+import { selectIsController } from '@/lib/room/selectors';
 import { ParticipantList } from './ParticipantList';
 
 export type SidebarPanel = 'chat' | 'people' | 'queue' | 'games';
@@ -34,7 +35,9 @@ export function Sidebar({
   onPanelChange: (panel: SidebarPanel) => void;
   unread?: number;
 }) {
-  const queueCount = useRoom((s) => s.snapshot?.queue.length ?? 0);
+  const isController = useRoom(selectIsController);
+  // Controllers also see the suggestions waiting for them.
+  const queueCount = useRoom((s) => (s.snapshot?.queue.length ?? 0) + (isController ? (s.snapshot?.suggestions.length ?? 0) : 0));
   const gameOpen = useRoom((s) => !!s.snapshot?.game);
 
   return (
@@ -50,7 +53,7 @@ export function Sidebar({
               id: 'chat',
               label: 'Chat',
               icon: <MessageCircle size={15} aria-hidden />,
-              badge: unread > 0 ? <span aria-label={` unread`} className="rounded-full bg-pink/60 px-1.5 text-xs">{unread > 99 ? '99+' : unread}</span> : undefined,
+              badge: unread > 0 ? <span aria-label={`${unread} unread`} className="rounded-full bg-pink/60 px-1.5 text-xs">{unread > 99 ? '99+' : unread}</span> : undefined,
             },
             { id: 'people', label: 'People', icon: <Users size={15} aria-hidden /> },
             {

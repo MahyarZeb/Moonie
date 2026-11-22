@@ -35,7 +35,7 @@ export function MobileTabBar({ value, onChange, unread = 0 }: { value: MobileTab
           <span className="relative">
             {t.icon}
             {t.id === 'chat' && unread > 0 && (
-              <span aria-label={` unread`} className="absolute -right-3 -top-1.5 min-w-4 rounded-full bg-pink px-1 text-center text-[10px] leading-4 text-ink">
+              <span aria-label={`${unread} unread`} className="absolute -right-3 -top-1.5 min-w-4 rounded-full bg-pink px-1 text-center text-[10px] leading-4 text-ink">
                 {unread > 99 ? '99+' : unread}
               </span>
             )}

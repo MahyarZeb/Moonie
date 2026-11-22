@@ -42,6 +42,16 @@ export class RoomController {
     };
   }
 
+  private reactionListeners = new Set<(from: string, emoji: string) => void>();
+
+  /** Subscribes to emoji reactions (events, not room state). Returns the unsubscribe function. */
+  onReaction(fn: (from: string, emoji: string) => void): () => void {
+    this.reactionListeners.add(fn);
+    return () => {
+      this.reactionListeners.delete(fn);
+    };
+  }
+
   private broadcaster: ShareBroadcaster | null = null;
 
   /** The tab's single screen-share broadcaster, created on first use. It outlives the Screen tab. */
@@ -70,6 +80,12 @@ export class RoomController {
       else if (msg.type === 'kicked' || msg.type === 'room:closed') {
         clearSession();
         this.attemptKey = null;
+      }
+      else if (msg.type === 'queue:notice') {
+        const what = msg.title ? `"${msg.title}"` : 'a video';
+        this.notifier(msg.kind === 'suggested' ? `${msg.by} suggested ${what}` : `${msg.by} added ${what}`);
+      } else if (msg.type === 'reaction') {
+        for (const fn of this.reactionListeners) fn(msg.from, msg.emoji);
       }
       this.store.dispatch(msg);
     });

@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, LogOut } from 'lucide-react';
+import { Crown, LogOut, Star } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
-import { selectIsHost } from '@/lib/room/selectors';
+import { selectSelfRole } from '@/lib/room/selectors';
 import { getRoomTheme } from '@/lib/theme/roomThemes';
 import { InviteButton } from './InviteButton';
 import { SettingsButton, SettingsDialog } from './SettingsDialog';
@@ -17,7 +17,7 @@ export function RoomHeader() {
   const router = useRouter();
   const controller = useRoomController();
   const snapshot = useRoom((s) => s.snapshot);
-  const isHost = useRoom(selectIsHost);
+  const role = useRoom(selectSelfRole);
   const [settingsOpen, setSettingsOpen] = useState(false);
   if (!snapshot) return null;
 
@@ -37,9 +37,14 @@ export function RoomHeader() {
           </h1>
           <div className="flex items-center gap-2 text-xs text-ink-soft">
             <Badge tone="lavender">{snapshot.code}</Badge>
-            {isHost && (
+            {role === 'host' && (
               <Badge tone="pink">
                 <Crown size={11} aria-hidden /> You are the host
+              </Badge>
+            )}
+            {role === 'co_host' && (
+              <Badge tone="lavender">
+                <Star size={11} aria-hidden /> You are a co-host
               </Badge>
             )}
           </div>

@@ -1,7 +1,9 @@
 'use client';
 import { useMemo } from 'react';
+import { canActOn } from '@shared/permissions';
+import type { ChatMessage } from '@shared/protocol';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
-import { selectConnectedCount } from '@/lib/room/selectors';
+import { selectConnectedCount, selectIsController, selectSelfRole } from '@/lib/room/selectors';
 import { ChatInput } from './ChatInput';
 import { MessageList } from './MessageList';
 import { TypingIndicator } from './TypingIndicator';
@@ -14,6 +16,17 @@ export function ChatPanel() {
   const typing = useRoom((s) => s.typing);
   const selfId = useRoom((s) => s.selfId);
   const online = useRoom(selectConnectedCount);
+  const selfRole = useRoom(selectSelfRole);
+  const isController = useRoom(selectIsController);
+  const settings = useRoom((s) => s.snapshot?.settings);
+  const muted = !!participants?.find((p) => p.id === selfId)?.muted;
+
+  // Mirrors the server rule. The server decides; this only hides buttons that would be refused.
+  const canDelete = (m: ChatMessage) => {
+    if (!isController || m.kind === 'system' || !m.from || m.from === selfId || !settings) return false;
+    const senderRole = participants?.find((p) => p.id === m.from)?.role ?? 'member';
+    return selfRole === 'host' || canActOn(selfRole, senderRole, 'chat.moderate', settings);
+  };
 
   const typingNames = useMemo(
     () =>
@@ -29,9 +42,15 @@ export function ChatPanel() {
       <p className="text-sm font-bold text-ink-soft" aria-live="polite">
         {online} online
       </p>
-      <MessageList messages={chat ?? []} selfId={selfId} />
+      <MessageList
+        messages={chat ?? []}
+        selfId={selfId}
+        canDelete={canDelete}
+        onDelete={(m) => controller.transport.send({ type: 'chat:delete', messageId: m.id })}
+      />
       <TypingIndicator names={typingNames} />
       <ChatInput
+        muted={muted}
         onSend={(text) => controller.transport.send({ type: 'chat:send', text })}
         onTyping={(typing) => controller.transport.send({ type: 'chat:typing', typing })}
       />

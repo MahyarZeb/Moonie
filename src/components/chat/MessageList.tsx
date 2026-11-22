@@ -7,7 +7,17 @@ import { MessageBubble } from './MessageBubble';
 const STICK_PX = 80;
 
 /** Scrolls to the newest message while the reader is near the bottom, otherwise shows a "New messages" pill. */
-export function MessageList({ messages, selfId }: { messages: ChatMessage[]; selfId?: string }) {
+export function MessageList({
+  messages,
+  selfId,
+  canDelete,
+  onDelete,
+}: {
+  messages: ChatMessage[];
+  selfId?: string;
+  canDelete?: (message: ChatMessage) => boolean;
+  onDelete?: (message: ChatMessage) => void;
+}) {
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const lastId = useRef<string | undefined>(undefined);
@@ -57,7 +67,15 @@ export function MessageList({ messages, selfId }: { messages: ChatMessage[]; sel
             {messages.map((m, i) => {
               const prev = messages[i - 1];
               const showHeader = m.kind === 'system' || !prev || prev.kind === 'system' || prev.from !== m.from;
-              return <MessageBubble key={m.id} message={m} own={!!selfId && m.from === selfId} showHeader={showHeader} />;
+              return (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  own={!!selfId && m.from === selfId}
+                  showHeader={showHeader}
+                  onDelete={canDelete?.(m) ? () => onDelete?.(m) : undefined}
+                />
+              );
             })}
           </ul>
         )}

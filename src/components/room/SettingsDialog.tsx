@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Lock, Save, Settings, Unlock } from 'lucide-react';
 import { LIMITS } from '@shared/constants';
-import type { AvatarId, ThemeId } from '@shared/protocol';
+import type { AvatarId, RoomSettings, ThemeId } from '@shared/protocol';
 import { sanitizeName, validPassword } from '@shared/validate';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -12,6 +12,37 @@ import { saveIdentity } from '@/lib/identity/identity';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
 import { ProfilePicker } from './ProfilePicker';
 import { ThemePicker } from './ThemePicker';
+
+const RULES: { key: keyof RoomSettings; label: string; hint: string }[] = [
+  { key: 'requireApproval', label: 'Approval required for suggestions', hint: 'Videos members add wait for a host or co-host.' },
+  { key: 'autoNext', label: 'Auto-play next video', hint: 'The next queued video starts when one ends.' },
+  { key: 'coHostsCanKick', label: 'Co-hosts can remove people', hint: 'Co-hosts may remove members from the room.' },
+];
+
+/** The three room rules. The host flips them; everyone else sees them read-only. */
+function RoomRules({ editable, settings }: { editable: boolean; settings: RoomSettings }) {
+  const controller = useRoomController();
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-1 text-sm font-bold">Room rules</legend>
+      {RULES.map((r) => (
+        <label key={r.key} className="flex items-start gap-3 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[rgb(167_139_250)]"
+            checked={settings[r.key]}
+            disabled={!editable}
+            onChange={(e) => controller.transport.send({ type: 'room:settings', [r.key]: e.target.checked })}
+          />
+          <span>
+            <span className="block font-bold">{r.label}</span>
+            <span className="block text-xs text-ink-soft">{r.hint}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 function SettingsForm({ onDone }: { onDone: () => void }) {
   const controller = useRoomController();
@@ -123,6 +154,7 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
           </dl>
         )}
       </section>
+      <RoomRules editable={isHost} settings={snapshot.settings} />
       {error && (
         <p role="alert" className="rounded-2xl bg-pink/30 px-4 py-2 text-sm font-semibold">
           {error}

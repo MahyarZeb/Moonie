@@ -9,7 +9,16 @@ const TYPING_THROTTLE_MS = 2000;
 const TYPING_IDLE_MS = 3000;
 
 /** Message box with an emoji popover. Reports typing at most every 2 s and clears it after 3 s idle, on blur and on send. */
-export function ChatInput({ onSend, onTyping }: { onSend: (text: string) => void; onTyping: (typing: boolean) => void }) {
+export function ChatInput({
+  onSend,
+  onTyping,
+  muted = false,
+}: {
+  onSend: (text: string) => void;
+  onTyping: (typing: boolean) => void;
+  /** A host or co-host muted this person: the box is disabled (they can still react). */
+  muted?: boolean;
+}) {
   const [text, setText] = useState('');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -85,15 +94,16 @@ export function ChatInput({ onSend, onTyping }: { onSend: (text: string) => void
         value={text}
         maxLength={LIMITS.chatMax}
         autoComplete="off"
-        placeholder="Say something sweet…"
+        placeholder={muted ? 'You are muted by a host' : 'Say something sweet…'}
+        disabled={muted}
         onChange={(e) => change(e.target.value)}
         onBlur={stopTyping}
         className="input-soft min-w-0 flex-1"
       />
-      <IconButton label="Emoji" data-emoji-toggle aria-expanded={emojiOpen} onClick={() => setEmojiOpen((o) => !o)}>
+      <IconButton label="Emoji" disabled={muted} data-emoji-toggle aria-expanded={emojiOpen} onClick={() => setEmojiOpen((o) => !o)}>
         <Smile size={18} />
       </IconButton>
-      <IconButton label="Send message" type="submit" disabled={!text.trim()} className="bg-purple text-white hover:bg-purple/80">
+      <IconButton label="Send message" type="submit" disabled={muted || !text.trim()} className="bg-purple text-white hover:bg-purple/80">
         <Send size={17} />
       </IconButton>
     </form>

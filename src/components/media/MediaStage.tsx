@@ -1,23 +1,27 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Armchair, MonitorPlay } from 'lucide-react';
-import { useRoom } from '@/lib/room/RoomProvider';
+import { Armchair, MonitorPlay, SkipForward } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { ReactionBar, ReactionLayer } from '@/components/room/ReactionBar';
+import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
 import { selectIsController } from '@/lib/room/selectors';
 import { getRoomTheme } from '@/lib/theme/roomThemes';
 import { useVideoTitle } from '@/lib/youtube/useVideoTitle';
+import { AddVideoBar } from './AddVideoBar';
 import { LocalStage } from './LocalStage';
 import { ScreenView } from './ScreenView';
 import { SourceSelector } from './SourceSelector';
 import { YouTubePlayer, type YouTubeMedia } from './YouTubePlayer';
 
-/** The main player area: the current media on top and, for the host, the source selector below. */
+/** The main player area: the current media on top, reactions and the Add video box for everyone, and the source selector for hosts and co-hosts. */
 export function MediaStage() {
   const media = useRoom((s) => s.snapshot?.media ?? null);
   const isHost = useRoom(selectIsController);
 
   return (
     <div className="space-y-4">
+      <div className="relative space-y-4">
       {media?.kind === 'youtube' ? (
         <>
           <YouTubePlayer key={isHost ? 'controller' : 'follower'} media={media} />
@@ -30,18 +34,29 @@ export function MediaStage() {
       ) : (
         <EmptyStage />
       )}
+      <ReactionLayer />
+      </div>
+      <ReactionBar />
+      <AddVideoBar />
       {isHost && <SourceSelector />}
     </div>
   );
 }
 
 function NowPlaying({ media }: { media: YouTubeMedia }) {
+  const controller = useRoomController();
   const title = useVideoTitle(media.videoId, media.title);
+  const canSkip = useRoom(selectIsController);
   return (
-    <p className="flex items-center gap-2 px-1 text-sm font-semibold text-ink-soft">
-      <MonitorPlay size={16} aria-hidden />
-      <span className="truncate">Now playing: {title}</span>
-    </p>
+    <div className="flex items-center gap-2 px-1 text-sm font-semibold text-ink-soft">
+      <MonitorPlay size={16} aria-hidden className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">Now playing: {title}</span>
+      {canSkip && (
+        <Button size="sm" variant="secondary" icon={<SkipForward size={14} aria-hidden />} onClick={() => controller.transport.send({ type: 'queue:skip' })}>
+          Skip
+        </Button>
+      )}
+    </div>
   );
 }
 

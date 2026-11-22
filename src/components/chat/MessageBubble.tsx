@@ -1,10 +1,22 @@
+import { Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@shared/protocol';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils/cn';
 import { formatClock } from '@/lib/utils/format';
 
 /** One chat line. Text is rendered as a React child, never as HTML. */
-export function MessageBubble({ message, own, showHeader }: { message: ChatMessage; own: boolean; showHeader: boolean }) {
+export function MessageBubble({
+  message,
+  own,
+  showHeader,
+  onDelete,
+}: {
+  message: ChatMessage;
+  own: boolean;
+  showHeader: boolean;
+  /** Set for hosts and co-hosts who may delete this message. */
+  onDelete?: () => void;
+}) {
   if (message.kind === 'system') {
     return (
       <li className="my-1 text-center text-xs font-semibold text-ink-soft">
@@ -30,6 +42,17 @@ export function MessageBubble({ message, own, showHeader }: { message: ChatMessa
           {message.text}
         </p>
       </div>
+      {onDelete && (
+        <button
+          type="button"
+          aria-label="Delete message"
+          title="Delete message"
+          onClick={onDelete}
+          className="mb-1 shrink-0 rounded-full p-1.5 text-ink-soft opacity-60 transition hover:bg-pink/40 hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Trash2 size={13} aria-hidden />
+        </button>
+      )}
     </li>
   );
 }
