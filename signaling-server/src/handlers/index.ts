@@ -1,6 +1,7 @@
 import type { ClientMessage } from '../../../shared/protocol';
 import { Conn, type HandlerContext } from '../connection';
 import { handleChatSend, handleChatTyping } from './chat';
+import { handleGameAction, handleGameClose, handleGameOpen } from './game';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
 import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } from './media';
 import { handlePlayback } from './playback';
@@ -8,7 +9,7 @@ import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder 
 import { handleRtcSignal, handleShareStart, handleShareStop } from './share';
 import { handleKick, handleLeave, handlePing, handleProfile, handleSettings, handleTransfer } from './room';
 
-/** Routes one validated client message. Later phases add cases for media, chat, games and rtc. */
+/** Routes one validated client message. */
 export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessage): Promise<void> {
   switch (msg.type) {
     case 'room:peek':
@@ -69,7 +70,11 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleChatSend(room, pid, msg);
     case 'chat:typing':
       return handleChatTyping(room, pid, msg);
-    default:
-      return conn.error('bad_request', 'This message is not supported yet', msg.ref);
+    case 'game:open':
+      return handleGameOpen(conn, room, msg);
+    case 'game:close':
+      return handleGameClose(conn, room, pid, msg);
+    case 'game:action':
+      return handleGameAction(conn, room, pid, msg);
   }
 }

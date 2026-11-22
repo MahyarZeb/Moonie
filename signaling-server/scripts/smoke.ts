@@ -418,6 +418,112 @@ async function main() {
   for (const c of [lHost, lGuest, lLate]) c.ws.terminate();
   await sleep(100);
 
+  // Free connections first: the server allows 20 per IP.
+  for (const c of open) c.ws.terminate();
+  open.length = 0;
+  await sleep(150);
+
+  console.log('games');
+  const gHost = await mk();
+  const gRoom = await createRoom(gHost);
+  const gA = await mk();
+  const gB = await mk();
+  await join(gA, gRoom.snapshot.code, 'GA');
+  await join(gB, gRoom.snapshot.code, 'GB');
+  const lastGame = (c: Client) => {
+    const m = [...c.msgs].reverse().find((x) => x.type === 'game:state');
+    return m?.type === 'game:state' ? m.game : undefined;
+  };
+  const gameMark = gB.mark();
+  gHost.send({ type: 'game:open', kind: 'tictactoe' });
+  check((await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'tictactoe', gameMark))?.type === 'game:state', 'game:open reaches everyone');
+  const reopen = await gA.waitFor((m) => m.type === 'game:state');
+  check(!!reopen, 'participants receive the opened game');
+  gHost.send({ type: 'game:action', action: { type: 'sit', mark: 'X' } });
+  gA.send({ type: 'game:action', action: { type: 'sit', mark: 'O' } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'tictactoe' && m.game.status === 'playing', gameMark);
+  gHost.send({ type: 'game:action', action: { type: 'move', index: 4 } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'tictactoe' && m.game.board[4] === 'X', gameMark);
+  const legal = lastGame(gB);
+  check(legal?.kind === 'tictactoe' && legal.board[4] === 'X' && legal.turn === 'O', 'a legal TTT move is applied and broadcast');
+
+  await sleep(100);
+  const snapshotOf = (g: unknown) => JSON.stringify(g);
+  const before = snapshotOf(lastGame(gB));
+  const emarkA = gA.mark();
+  const emarkB = gB.mark();
+  const illegal = await gA.request({ type: 'game:action', action: { type: 'move', index: 4 } });
+  check(illegal?.type === 'error' && illegal.code === 'invalid_state', 'a move on an occupied square is invalid_state');
+  const wrongTurn = await gHost.request({ type: 'game:action', action: { type: 'move', index: 0 } });
+  check(wrongTurn?.type === 'error' && wrongTurn.code === 'invalid_state', 'a move out of turn is invalid_state');
+  const spectator = await gB.request({ type: 'game:action', action: { type: 'move', index: 0 } });
+  check(spectator?.type === 'error' && spectator.code === 'forbidden', 'a spectator move is forbidden');
+  for (const action of [{ type: 'move', index: '1' }, { type: 'move', index: 12 }, { type: 'skipTurn' }, { type: 'roll' }, { type: 'sit', color: 'red' }]) {
+    const r = await gA.request({ type: 'game:action', action } as unknown as ClientMessage);
+    check(r?.type === 'error' && r.code === 'bad_request', `garbage action ${JSON.stringify(action)} is bad_request`);
+  }
+  await sleep(150);
+  check(
+    snapshotOf(lastGame(gB)) === before &&
+      !gA.msgs.slice(emarkA).some((m) => m.type === 'game:state') &&
+      !gB.msgs.slice(emarkB).some((m) => m.type === 'game:state'),
+    'rejected game actions leave the state unchanged and broadcast nothing',
+  );
+
+  gHost.send({ type: 'game:close' });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game === null, emarkB);
+  check(lastGame(gB) === null, 'game:close clears the game for everyone');
+
+  console.log('rps hidden picks');
+  gHost.send({ type: 'game:open', kind: 'rps' });
+  gHost.send({ type: 'game:action', action: { type: 'join' } });
+  gA.send({ type: 'game:action', action: { type: 'join' } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'rps' && m.game.players.length === 2, emarkB);
+  gHost.send({ type: 'game:action', action: { type: 'start' } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'rps' && m.game.phase === 'choosing', emarkB);
+  const pickMark = gB.mark();
+  gHost.send({ type: 'game:action', action: { type: 'pick', choice: 'rock' } });
+  const hostPicked = await gA.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'rps' && m.game.picks[gRoom.selfId] === 'locked', emarkA);
+  check(!!hostPicked, "another player sees the host's pick as locked");
+  await sleep(100);
+  check(!gB.msgs.slice(pickMark).some((m) => JSON.stringify(m).includes('rock')), 'a spectator never receives the hidden pick');
+  check(!gA.msgs.slice(emarkA).some((m) => m.type === 'game:state' && JSON.stringify(m).includes('rock')), 'the other player never receives the hidden pick before the reveal');
+  const gLate = await mk();
+  const gLateJoin = await join(gLate, gRoom.snapshot.code, 'GL');
+  check(
+    gLateJoin?.type === 'room:joined' && gLateJoin.snapshot.game?.kind === 'rps' && !JSON.stringify(gLateJoin.snapshot.game).includes('rock'),
+    'a late joiner snapshot does not reveal the pick',
+  );
+  gA.send({ type: 'game:action', action: { type: 'pick', choice: 'scissors' } });
+  const revealed = await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'rps' && m.game.phase === 'revealed', pickMark);
+  check(
+    revealed?.type === 'game:state' && revealed.game?.kind === 'rps' && revealed.game.picks[gRoom.selfId] === 'rock' && revealed.game.result?.winners[0] === gRoom.selfId,
+    'picks are revealed to everyone once all have chosen',
+  );
+  gHost.send({ type: 'game:close' });
+
+  console.log('ludo turn order');
+  gHost.send({ type: 'game:open', kind: 'ludo' });
+  gHost.send({ type: 'game:action', action: { type: 'sit', color: 'red' } });
+  gA.send({ type: 'game:action', action: { type: 'sit', color: 'green' } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'ludo' && m.game.seats.filter((s) => s.playerId).length === 2, pickMark);
+  gHost.send({ type: 'game:action', action: { type: 'start' } });
+  await gB.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'ludo' && m.game.phase === 'playing', pickMark);
+  const outOfTurn = await gA.request({ type: 'game:action', action: { type: 'roll' } });
+  check(outOfTurn?.type === 'error' && outOfTurn.code === 'invalid_state', 'a Ludo roll out of turn is rejected');
+  const ludoBefore = lastGame(gB);
+  check(ludoBefore?.kind === 'ludo' && ludoBefore.turn === 'red' && ludoBefore.rollId === 0, 'Ludo state is unchanged after the rejection');
+  const rollMark = gA.mark();
+  gHost.send({ type: 'game:action', action: { type: 'roll', dice: 6 } } as unknown as ClientMessage); // extra field is dropped
+  const rolled = await gA.waitFor((m) => m.type === 'game:state' && m.game?.kind === 'ludo' && m.game.rollId === 1, rollMark);
+  check(
+    rolled?.type === 'game:state' && rolled.game?.kind === 'ludo' && rolled.game.lastRoll?.color === 'red' && rolled.game.lastRoll.value >= 1 && rolled.game.lastRoll.value <= 6,
+    'the server rolls the dice for the turn owner',
+  );
+  for (const c of open) c.ws.terminate();
+  open.length = 0;
+  await sleep(150);
+
   console.log('transport rules');
   const evil = await new Promise<number>((resolve) => {
     const ws = new WebSocket(URL_WS, { origin: 'http://evil.example' });

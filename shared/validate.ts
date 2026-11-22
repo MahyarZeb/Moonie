@@ -139,14 +139,67 @@ export function parseRtcSignalData(raw: unknown): SignalCheck {
 }
 
 // ---------------------------------------------------------------------------
-// Game actions (shapes are filled in with the games phase)
+// Game actions
 // ---------------------------------------------------------------------------
 
-/** Returns a typed action for the given game kind, or null when the shape is invalid. */
+const LUDO_COLORS = ['red', 'green', 'yellow', 'blue'] as const;
+const RPS_CHOICES = ['rock', 'paper', 'scissors'] as const;
+
+/**
+ * Returns a typed action for the given game kind, or null when the shape is invalid.
+ * Extra fields are dropped. Ludo `skipTurn` is server-only and is never accepted here.
+ */
 export function parseGameAction(kind: GameKind, raw: unknown): GameAction | null {
-  void kind;
-  void raw;
-  return null;
+  if (!isObject(raw)) return null;
+  const type = raw.type;
+  if (kind === 'ludo') {
+    switch (type) {
+      case 'leaveSeat':
+      case 'start':
+      case 'roll':
+      case 'restart':
+        return { type };
+      case 'sit':
+        return LUDO_COLORS.includes(raw.color as (typeof LUDO_COLORS)[number])
+          ? { type, color: raw.color as (typeof LUDO_COLORS)[number] }
+          : null;
+      case 'move':
+        return typeof raw.piece === 'number' && Number.isInteger(raw.piece) && raw.piece >= 0 && raw.piece <= 3
+          ? { type, piece: raw.piece }
+          : null;
+      default:
+        return null;
+    }
+  }
+  if (kind === 'tictactoe') {
+    switch (type) {
+      case 'leaveSeat':
+      case 'restart':
+        return { type };
+      case 'sit':
+        return raw.mark === 'X' || raw.mark === 'O' ? { type, mark: raw.mark } : null;
+      case 'move':
+        return typeof raw.index === 'number' && Number.isInteger(raw.index) && raw.index >= 0 && raw.index <= 8
+          ? { type, index: raw.index }
+          : null;
+      default:
+        return null;
+    }
+  }
+  switch (type) {
+    case 'join':
+    case 'leave':
+    case 'start':
+    case 'next':
+    case 'resetScores':
+      return { type };
+    case 'pick':
+      return RPS_CHOICES.includes(raw.choice as (typeof RPS_CHOICES)[number])
+        ? { type, choice: raw.choice as (typeof RPS_CHOICES)[number] }
+        : null;
+    default:
+      return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

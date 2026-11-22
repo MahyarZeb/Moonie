@@ -1,16 +1,17 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ListVideo, MessageCircle, Tv, Users } from 'lucide-react';
+import { Gamepad2, ListVideo, MessageCircle, Tv, Users } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
-export type MobileTab = 'watch' | 'chat' | 'people' | 'queue';
+export type MobileTab = 'watch' | 'chat' | 'people' | 'queue' | 'games';
 
 const TABS: { id: MobileTab; label: string; icon: ReactNode }[] = [
   { id: 'watch', label: 'Watch', icon: <Tv size={20} /> },
   { id: 'chat', label: 'Chat', icon: <MessageCircle size={20} /> },
   { id: 'people', label: 'People', icon: <Users size={20} /> },
   { id: 'queue', label: 'Queue', icon: <ListVideo size={20} /> },
+  { id: 'games', label: 'Games', icon: <Gamepad2 size={20} /> },
 ];
 
 /** Bottom tab bar for phones. Panels are shown one at a time. Hidden from the lg breakpoint up. */

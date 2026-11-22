@@ -1,6 +1,6 @@
 import type { AvatarId } from '../protocol';
 
-// Game types. The reducers that use them arrive with the games phase.
+// Game types shared by the server, the client and the pure reducers in this folder.
 export type GameKind = 'ludo' | 'tictactoe' | 'rps';
 export type Color = 'red' | 'green' | 'yellow' | 'blue';
 export type Choice = 'rock' | 'paper' | 'scissors';
@@ -18,7 +18,8 @@ export interface Actor {
   isHost: boolean;
 }
 
-export type Result<S> = { ok: true; state: S } | { ok: false; error: string };
+/** `code` is `forbidden` when the actor may not act at all (not seated); otherwise a failure means `invalid_state`. */
+export type Result<S> = { ok: true; state: S } | { ok: false; error: string; code?: 'forbidden' };
 
 export interface LudoState {
   kind: 'ludo';
@@ -30,6 +31,8 @@ export interface LudoState {
   rollId: number;
   sixesInRow: number;
   winner: Color | null;
+  /** The most recent roll, kept after an automatic pass so everyone can see the dice. */
+  lastRoll: { color: Color; value: number } | null;
   lastMove: {
     color: Color;
     piece: number;

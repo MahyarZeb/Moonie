@@ -163,9 +163,42 @@ describe('misc rows', () => {
     expect(isOk({ type: 'host:kick', id: '' })).toBe(false);
     expect(isOk({ type: 'host:transfer', to: 'x'.repeat(65) })).toBe(false);
   });
-  it('parseGameAction rejects everything until the games phase', () => {
-    for (const v of [null, [], 'x', { type: 'sit', color: 'red' }, { type: 'skipTurn' }]) {
-      expect(parseGameAction('ludo', v)).toBeNull();
-    }
+  it('parseGameAction accepts a valid action per kind and drops extra fields', () => {
+    expect(parseGameAction('ludo', { type: 'sit', color: 'red', extra: 1 })).toEqual({ type: 'sit', color: 'red' });
+    expect(parseGameAction('ludo', { type: 'move', piece: 3 })).toEqual({ type: 'move', piece: 3 });
+    expect(parseGameAction('ludo', { type: 'roll' })).toEqual({ type: 'roll' });
+    expect(parseGameAction('tictactoe', { type: 'move', index: 8 })).toEqual({ type: 'move', index: 8 });
+    expect(parseGameAction('tictactoe', { type: 'sit', mark: 'O' })).toEqual({ type: 'sit', mark: 'O' });
+    expect(parseGameAction('rps', { type: 'pick', choice: 'paper' })).toEqual({ type: 'pick', choice: 'paper' });
+    expect(parseGameAction('rps', { type: 'join' })).toEqual({ type: 'join' });
+  });
+  it('parseGameAction rejects garbage', () => {
+    const garbage: [Parameters<typeof parseGameAction>[0], unknown][] = [
+      ['tictactoe', { type: 'move', index: '1' }],
+      ['tictactoe', { type: 'move', index: 9 }],
+      ['tictactoe', { type: 'move', index: 1.5 }],
+      ['tictactoe', { type: 'move', index: -1 }],
+      ['tictactoe', { type: 'sit', mark: 'Z' }],
+      ['ludo', { type: 'move', piece: 9 }],
+      ['ludo', { type: 'move', piece: 1.5 }],
+      ['ludo', { type: 'sit', color: 'purple' }],
+      ['ludo', { type: 'sit' }],
+      ['ludo', { type: 'skipTurn' }],
+      ['ludo', { type: 'move', index: 1 }],
+      ['ludo', { type: 'pick', choice: 'rock' }],
+      ['rps', { type: 'pick', choice: 'lizard' }],
+      ['rps', { type: 'roll' }],
+      ['rps', { type: 'skipTurn' }],
+      ['ludo', { type: 'sit', mark: 'X' }],
+      ['ludo', null],
+      ['ludo', []],
+      ['ludo', 'x'],
+      ['rps', 5],
+      ['rps', {}],
+    ];
+    for (const [kind, raw] of garbage) expect(parseGameAction(kind, raw), JSON.stringify(raw)).toBeNull();
+    // A TTT action sent to a Ludo room: `mark` instead of `color`.
+    expect(parseGameAction('ludo', { type: 'sit', mark: 'X' })).toBeNull();
+    expect(parseGameAction('tictactoe', { type: 'roll' })).toBeNull();
   });
 });

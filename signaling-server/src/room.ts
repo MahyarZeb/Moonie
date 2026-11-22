@@ -16,7 +16,9 @@ import type {
   ServerMessage,
   ThemeId,
 } from '../../shared/protocol';
-import type { GameView } from '../../shared/games/types';
+import { createGame, ludo, reduceGame, removeGamePlayer, seatedIds, viewGame, type GameState } from '../../shared/games';
+import type { Actor, GameKind } from '../../shared/games/types';
+import { parseGameAction } from '../../shared/validate';
 import type { Logger } from './log';
 import type { PasswordHash } from './password';
 
@@ -35,6 +37,8 @@ export interface RoomOptions {
   hostGraceMs: number;
   emptyRoomTtlMs: number;
   maxRoomAgeMs: number;
+  /** A Ludo turn owner who has been disconnected this long loses the turn. */
+  turnSkipMs: number;
 }
 
 export interface ServerParticipant {
@@ -81,7 +85,10 @@ export class Room {
   media: MediaState | null = null;
   playback: PlaybackState;
   queue: QueueItem[] = [];
-  game: GameView | null = null;
+  /** Authoritative game state. Clients only ever see gameView(id), which redacts hidden information. */
+  gameState: GameState | null = null;
+  /** Float source for dice. Defaults to a CSPRNG; tests can replace it. */
+  rng: () => number = () => randomBytes(6).readUIntBE(0, 6) / 2 ** 48;
   chat: ChatMessage[] = [];
   mediaRev = 0;
   shareSession: ShareSession | null = null;
@@ -140,7 +147,6 @@ export class Room {
   }
 
   snapshot(viewerId?: string): RoomSnapshot {
-    void viewerId;
     return {
       code: this.code,
       name: this.name,
@@ -153,7 +159,7 @@ export class Room {
       media: this.media,
       playback: this.playback,
       queue: this.queue,
-      game: this.game,
+      game: this.gameState ? viewGame(this.gameState, viewerId ?? '') : null,
       chat: this.chat.slice(-LIMITS.chatHistory),
       serverTime: this.clock.now(),
     };
@@ -304,6 +310,7 @@ export class Room {
     const wasHost = id === this.hostId;
     if (this.shareSession?.sharerId === id) this.endShare();
     this.participants.delete(id);
+    this.dropFromGame(id);
     this.broadcast({ type: 'participant:left', id, reason });
     this.addSystemChat(reason === 'kicked' ? `${sp.participant.name} was removed 🚪` : `${sp.participant.name} left 👋`);
     if (wasHost) this.migrateHost(reason === 'timeout' ? 'timeout' : 'left');
@@ -693,6 +700,77 @@ export class Room {
     return { ok: true };
   }
 
+  // ------------------------------------------------------------------ games
+
+  /** Sends every participant their own redacted view of the current game (or null). */
+  private publishGame(): void {
+    for (const id of this.participants.keys()) {
+      this.sendTo(id, { type: 'game:state', game: this.gameState ? viewGame(this.gameState, id) : null });
+    }
+  }
+
+  private actorFor(id: string): Actor | null {
+    const sp = this.participants.get(id);
+    if (!sp) return null;
+    return { id, name: sp.participant.name, avatar: sp.participant.avatar, isHost: id === this.hostId };
+  }
+
+  openGame(kind: GameKind): Fail | { ok: true } {
+    if (this.gameState) return fail('invalid_state', 'A game is already open');
+    this.gameState = createGame(kind);
+    this.publishGame();
+    return { ok: true };
+  }
+
+  closeGame(actorId: string): Fail | { ok: true } {
+    const g = this.gameState;
+    if (!g) return fail('invalid_state', 'No game is open');
+    if (actorId !== this.hostId && !seatedIds(g).includes(actorId)) {
+      return fail('forbidden', 'Only the host or a seated player can close the game');
+    }
+    this.gameState = null;
+    this.publishGame();
+    return { ok: true };
+  }
+
+  /** Validates the shape, applies the reducer, and publishes the new state only on success. */
+  gameAction(actorId: string, raw: unknown): Fail | { ok: true } {
+    const g = this.gameState;
+    if (!g) return fail('invalid_state', 'No game is open');
+    const action = parseGameAction(g.kind, raw);
+    if (!action) return fail('bad_request', 'That is not a valid move for this game');
+    const actor = this.actorFor(actorId);
+    if (!actor) return fail('not_found', 'Participant not found');
+    const res = reduceGame(g, action, actor, this.rng);
+    if (!res.ok) return fail(res.code ?? 'invalid_state', res.error);
+    this.gameState = res.state;
+    this.publishGame();
+    return { ok: true };
+  }
+
+  /** Removes a departed participant from the game, publishing when anything changed. */
+  private dropFromGame(id: string): void {
+    const g = this.gameState;
+    if (!g) return;
+    const next = removeGamePlayer(g, id);
+    if (next === g) return;
+    this.gameState = next;
+    this.publishGame();
+  }
+
+  /** Passes a Ludo turn whose owner has been disconnected for `turnSkipMs`. */
+  private skipAbsentTurn(now: number): void {
+    const g = this.gameState;
+    if (g?.kind !== 'ludo') return;
+    const owner = ludo.turnOwner(g);
+    const sp = owner ? this.participants.get(owner) : undefined;
+    if (!owner || !sp || sp.disconnectedAt === undefined || now - sp.disconnectedAt < this.opts.turnSkipMs) return;
+    const res = ludo.reduce(g, { type: 'skipTurn' }, { id: owner, name: sp.participant.name, avatar: sp.participant.avatar, isHost: false }, this.rng);
+    if (!res.ok) return;
+    this.gameState = res.state;
+    this.publishGame();
+  }
+
   // ------------------------------------------------------------- lifecycle
 
   /** Handles deadlines. Returns true when the registry should delete the room. */
@@ -707,6 +785,7 @@ export class Room {
         this.removeParticipant(id, 'timeout');
       }
     }
+    this.skipAbsentTurn(now);
     const host = this.participants.get(this.hostId);
     if (host && host.disconnectedAt !== undefined && now - host.disconnectedAt >= this.opts.hostGraceMs) {
       this.migrateHost('timeout');

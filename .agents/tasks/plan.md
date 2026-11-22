@@ -106,13 +106,13 @@ Decisions recorded (design is approved, so none re-decided):
 
 ## P6: Games
 
-- [ ] P6-1. Reducers first: `shared/games/{ludo,tictactoe,rps,index}.ts` with `view()` redaction, `THREE_SIXES_FORFEIT` as the single switch (note 6), `pieceCoord` mapping, log capped at 20; finish `parseGameAction` shapes (reject `skipTurn`, wrong kind, non-integers). Tests for every row in section 16 (TTT, RPS 27 triples + 2-player matrix, Ludo rules, parseGameAction garbage).
+- [x] P6-1. Reducers first: `shared/games/{ludo,tictactoe,rps,index}.ts` with `view()` redaction, `THREE_SIXES_FORFEIT` as the single switch (note 6), `pieceCoord` mapping, log capped at 20; finish `parseGameAction` shapes (reject `skipTurn`, wrong kind, non-integers). Tests for every row in section 16 (TTT, RPS 27 triples + 2-player matrix, Ludo rules, parseGameAction garbage).
       Verify: `npm test`.
-- [ ] P6-2. Server game handlers (`game:open|close|action`), seats, per-recipient redaction on broadcast and snapshot, server rng for dice, Ludo turn-skip sweep, leave/forfeit handling, `bad_request` vs `invalid_state` vs `forbidden`. Tests.
+- [x] P6-2. Server game handlers (`game:open|close|action`), seats, per-recipient redaction on broadcast and snapshot, server rng for dice, Ludo turn-skip sweep, leave/forfeit handling, `bad_request` vs `invalid_state` vs `forbidden`. Tests.
       Verify: `npm --prefix signaling-server test`.
-- [ ] P6-3. UI: `GamesPanel`, `GamePicker`, `ludo/{LudoBoard (SVG),Dice,LudoSeats}`, `tictactoe/TicTacToeBoard`, `rps/RpsPanel`, winner banners, restart, spectators, turn indicators, Games tab.
+- [x] P6-3. UI: `GamesPanel`, `GamePicker`, `ludo/{LudoBoard (SVG),Dice,LudoSeats}`, `tictactoe/TicTacToeBoard`, `rps/RpsPanel`, winner banners, restart, spectators, turn indicators, Games tab.
       Verify: `npm run typecheck; npm run lint; npm run build`.
-- [ ] P6-4. Games help text includes the three-sixes house rule (note 6). Extend smoke (legal and illegal TTT moves, garbage payloads -> `bad_request` with unchanged state, RPS hidden picks not visible to client B before reveal, Ludo out-of-turn rejected). Run gate, commit `feat: multiplayer games`.
+- [x] P6-4. Games help text includes the three-sixes house rule (note 6). Extend smoke (legal and illegal TTT moves, garbage payloads -> `bad_request` with unchanged state, RPS hidden picks not visible to client B before reveal, Ludo out-of-turn rejected). Run gate, commit `feat: multiplayer games`.
 
 ## P7: Polish and deploy prep
 
