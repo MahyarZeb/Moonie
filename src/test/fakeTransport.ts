@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from '@shared/permissions';
 import type {
   ClientMessage,
   CreateRoomInput,
@@ -32,9 +33,10 @@ export function makeSnapshot(code = 'ABCD23'): RoomSnapshot {
     theme: 'cloud',
     hasPassword: false,
     hostId: 'me',
+    settings: DEFAULT_SETTINGS,
     createdAt: 0,
     maxParticipants: 8,
-    participants: [{ id: 'me', name: 'Mochi', avatar: 'cat', joinedAt: 1, connected: true }],
+    participants: [{ id: 'me', name: 'Mochi', avatar: 'cat', joinedAt: 1, connected: true, role: 'host' }],
     media: null,
     playback: { rev: 0, status: 'paused', positionSec: 0, updatedAt: 0 },
     queue: [],

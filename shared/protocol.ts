@@ -4,12 +4,28 @@ import type { GameAction, GameKind, GameView } from './games/types';
 export type ThemeId = (typeof THEME_IDS)[number];
 export type AvatarId = (typeof AVATAR_IDS)[number];
 
+/** Wire values. Display names are HOST, CO_HOST and MEMBER (see ROLES in shared/constants.ts). Set by the server only. */
+export type Role = 'host' | 'co_host' | 'member';
+
+export interface RoomSettings {
+  /** Member video suggestions wait for a host or co-host to approve them. */
+  requireApproval: boolean;
+  /** Play the next queued video when one ends. */
+  autoNext: boolean;
+  /** Co-hosts may remove members (never the host or another co-host). */
+  coHostsCanKick: boolean;
+}
+
 export interface Participant {
   id: string;
   name: string;
   avatar: AvatarId;
   joinedAt: number;
   connected: boolean;
+  /** Always set by the server; never read from a client message. */
+  role: Role;
+  /** Chat mute, set by a host or co-host. */
+  muted?: boolean;
   /** Same-file flow readiness, set by the server from `local:ready`. */
   hasFile?: boolean;
 }
@@ -69,6 +85,7 @@ export interface RoomSnapshot {
   theme: ThemeId;
   hasPassword: boolean;
   hostId: string;
+  settings: RoomSettings;
   createdAt: number;
   maxParticipants: number;
   participants: Participant[];
@@ -118,7 +135,8 @@ export type ClientMessage = { ref?: string } & (
     }
   | { type: 'room:leave' }
   | { type: 'profile:update'; displayName?: string; avatar?: AvatarId }
-  | { type: 'room:settings'; name?: string; theme?: ThemeId; password?: string | null }
+  | { type: 'room:settings'; name?: string; theme?: ThemeId; password?: string | null } & Partial<RoomSettings>
+  | { type: 'role:set'; to: string; role: 'co_host' | 'member' }
   | { type: 'host:transfer'; to: string }
   | { type: 'host:kick'; id: string }
   | { type: 'sync:ping'; t0: number }
@@ -176,7 +194,7 @@ export type ServerMessage =
   | { type: 'participant:updated'; participant: Participant }
   | { type: 'participant:left'; id: string; reason: 'left' | 'timeout' | 'kicked' }
   | { type: 'host:changed'; hostId: string; reason: 'left' | 'transfer' | 'timeout' }
-  | { type: 'room:settings'; name: string; theme: ThemeId; hasPassword: boolean }
+  | { type: 'room:settings'; name: string; theme: ThemeId; hasPassword: boolean; settings: RoomSettings }
   | { type: 'sync:pong'; t0: number; serverTime: number }
   | { type: 'media:state'; media: MediaState | null; playback: PlaybackState; queue: QueueItem[]; ref?: string }
   | { type: 'playback:state'; playback: PlaybackState; ref?: string }

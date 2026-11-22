@@ -288,7 +288,7 @@ describe('ShareBroadcaster', () => {
     transport.onMessage((m) => store.dispatch(m));
     transport.emit({ type: 'room:joined', selfId: 'me', resumeToken: 't', snapshot: makeSnapshot(), resumed: false });
     for (const id of ['v1', 'v2']) {
-      transport.emit({ type: 'participant:joined', participant: { id, name: id, avatar: 'cat', joinedAt: 2, connected: true } });
+      transport.emit({ type: 'participant:joined', participant: { id, name: id, avatar: 'cat', joinedAt: 2, connected: true, role: 'member' } });
     }
     transport.requestImpl = async (msg) => {
       if (opts.reject) throw new TransportError('not_host', 'nope');
@@ -382,7 +382,7 @@ describe('ShareBroadcaster', () => {
     const { share, transport } = setup();
     await share.start();
     transport.emit({ type: 'chat:typing', id: 'v1', typing: true });
-    transport.emit({ type: 'participant:updated', participant: { id: 'v1', name: 'v1', avatar: 'fox', joinedAt: 2, connected: true } });
+    transport.emit({ type: 'participant:updated', participant: { id: 'v1', name: 'v1', avatar: 'fox', joinedAt: 2, connected: true, role: 'member' } });
     expect(share.getState().status).toBe('sharing');
   });
 

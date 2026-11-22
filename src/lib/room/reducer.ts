@@ -173,7 +173,7 @@ export function roomReducer(state: RoomClientState, event: RoomEvent): RoomClien
     case 'room:settings':
       return {
         ...state,
-        snapshot: { ...snapshot, name: event.name, theme: event.theme, hasPassword: event.hasPassword },
+        snapshot: { ...snapshot, name: event.name, theme: event.theme, hasPassword: event.hasPassword, settings: event.settings },
       };
     case 'media:state':
       return { ...state, snapshot: { ...snapshot, media: event.media, playback: event.playback, queue: event.queue } };

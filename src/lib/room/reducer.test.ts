@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_SETTINGS } from '@shared/permissions';
 import type { Participant, RoomSnapshot, ServerMessage } from '@shared/protocol';
 import { initialRoomState, roomReducer, type RoomClientState, type RoomEvent } from './reducer';
 
@@ -8,6 +9,7 @@ const p = (id: string, name = id, extra: Partial<Participant> = {}): Participant
   avatar: 'cat',
   joinedAt: 1,
   connected: true,
+  role: 'member',
   ...extra,
 });
 
@@ -17,6 +19,7 @@ const snapshot = (over: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   theme: 'cloud',
   hasPassword: false,
   hostId: 'a',
+  settings: DEFAULT_SETTINGS,
   createdAt: 0,
   maxParticipants: 8,
   participants: [p('a'), p('b')],
@@ -129,8 +132,8 @@ describe('room events', () => {
 
   it('applies settings, media, playback and queue updates', () => {
     let s = inRoom();
-    s = roomReducer(s, { type: 'room:settings', name: 'New', theme: 'starlight', hasPassword: true });
-    expect(s.snapshot).toMatchObject({ name: 'New', theme: 'starlight', hasPassword: true });
+    s = roomReducer(s, { type: 'room:settings', name: 'New', theme: 'starlight', hasPassword: true, settings: { ...DEFAULT_SETTINGS, autoNext: false } });
+    expect(s.snapshot).toMatchObject({ name: 'New', theme: 'starlight', hasPassword: true, settings: { ...DEFAULT_SETTINGS, autoNext: false } });
     const playback = { rev: 1, status: 'playing' as const, positionSec: 3, updatedAt: 9 };
     s = roomReducer(s, { type: 'media:state', media: null, playback, queue: [] });
     expect(s.snapshot?.playback).toEqual(playback);

@@ -33,7 +33,15 @@ export const LIMITS = {
   chatHistory: 100,
   queueMax: 50,
   queuePerUser: 10,
+  suggestionsMax: 30,
+  suggestionsPerUser: 5,
 } as const;
+
+/** Wire role values with their display names. */
+export const ROLES = { HOST: 'host', CO_HOST: 'co_host', MEMBER: 'member' } as const;
+
+/** Emoji allowed in eaction:send. */
+export const REACTION_EMOJI = ['??', '??', '??', '??', '??', '??'] as const;
 
 export const DEFAULTS = {
   maxParticipants: 8,
