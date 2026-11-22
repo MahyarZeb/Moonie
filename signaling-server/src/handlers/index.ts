@@ -1,6 +1,6 @@
 import type { ClientMessage } from '../../../shared/protocol';
 import { Conn, type HandlerContext } from '../connection';
-import { handleChatSend, handleChatTyping } from './chat';
+import { handleChatDelete, handleChatMute, handleChatSend, handleChatTyping, handleReaction } from './chat';
 import { handleGameAction, handleGameClose, handleGameOpen } from './game';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
 import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } from './media';
@@ -80,7 +80,13 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
     case 'rtc:signal':
       return handleRtcSignal(ctx, room, pid, msg);
     case 'chat:send':
-      return handleChatSend(room, pid, msg);
+      return handleChatSend(conn, room, pid, msg);
+    case 'chat:delete':
+      return handleChatDelete(conn, room, pid, msg);
+    case 'chat:mute':
+      return handleChatMute(conn, room, pid, msg);
+    case 'reaction:send':
+      return handleReaction(conn, room, pid, msg);
     case 'chat:typing':
       return handleChatTyping(room, pid, msg);
     case 'game:open':

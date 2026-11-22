@@ -183,6 +183,8 @@ export function roomReducer(state: RoomClientState, event: RoomEvent): RoomClien
       return { ...state, snapshot: { ...snapshot, queue: event.queue } };
     case 'suggestions:updated':
       return { ...state, snapshot: { ...snapshot, suggestions: event.suggestions } };
+    case 'chat:deleted':
+      return { ...state, snapshot: { ...snapshot, chat: snapshot.chat.filter((m) => m.id !== event.id) } };
     case 'chat:message': {
       const chat = [...snapshot.chat, event.message].slice(-100);
       const typing = { ...state.typing };

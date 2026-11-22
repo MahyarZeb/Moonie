@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { REACTION_EMOJI } from './constants';
 import { parseClientMessage, parseGameAction, parseLocalFileMeta, sanitizeChat, sanitizeName } from './validate';
 
 const profile = { displayName: 'Mochi', avatar: 'cat' };
@@ -237,5 +238,23 @@ describe('queue, moderation and reaction messages', () => {
   it('queue:add drops a spoofed adder and role', () => {
     const r = parse({ type: 'queue:add', videoId: 'dQw4w9WgXcQ', addedBy: 'host', role: 'host' });
     expect(r).toEqual({ ok: true, msg: { type: 'queue:add', videoId: 'dQw4w9WgXcQ' } });
+  });
+
+  it('chat:delete and chat:mute validate ids and flags', () => {
+    expect(isOk({ type: 'chat:delete', messageId: 'm1' })).toBe(true);
+    expect(isOk({ type: 'chat:delete' })).toBe(false);
+    expect(parse({ type: 'chat:mute', id: 'p1', muted: true, role: 'host' })).toEqual({
+      ok: true,
+      msg: { type: 'chat:mute', id: 'p1', muted: true },
+    });
+    expect(isOk({ type: 'chat:mute', id: 'p1', muted: 'yes' })).toBe(false);
+    expect(isOk({ type: 'chat:mute', muted: true })).toBe(false);
+  });
+
+  it('reaction:send accepts only the fixed emoji', () => {
+    for (const emoji of REACTION_EMOJI) expect(isOk({ type: 'reaction:send', emoji })).toBe(true);
+    for (const emoji of ['x', '', 5, null, '<b>', REACTION_EMOJI[0] + REACTION_EMOJI[0]]) {
+      expect(isOk({ type: 'reaction:send', emoji }), String(emoji)).toBe(false);
+    }
   });
 });

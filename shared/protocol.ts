@@ -170,6 +170,9 @@ export type ClientMessage = { ref?: string } & (
   | { type: 'rtc:signal'; to: string; sessionId: string; linkId: string; data: RtcSignalData }
   | { type: 'chat:send'; text: string }
   | { type: 'chat:typing'; typing: boolean }
+  | { type: 'chat:delete'; messageId: string }
+  | { type: 'chat:mute'; id: string; muted: boolean }
+  | { type: 'reaction:send'; emoji: string }
   | { type: 'game:open'; kind: GameKind }
   | { type: 'game:close' }
   | { type: 'game:action'; action: GameAction }
@@ -209,6 +212,8 @@ export type ServerMessage =
   | { type: 'rtc:signal'; from: string; sessionId: string; linkId: string; data: RtcSignalData }
   | { type: 'chat:message'; message: ChatMessage }
   | { type: 'chat:typing'; id: string; typing: boolean }
+  | { type: 'chat:deleted'; id: string }
+  | { type: 'reaction'; from: string; emoji: string }
   | { type: 'game:state'; game: GameView | null }
   | { type: 'error'; code: ErrorCode; message: string; ref?: string };
 

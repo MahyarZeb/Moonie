@@ -40,8 +40,8 @@ export const LIMITS = {
 /** Wire role values with their display names. */
 export const ROLES = { HOST: 'host', CO_HOST: 'co_host', MEMBER: 'member' } as const;
 
-/** Emoji allowed in eaction:send. */
-export const REACTION_EMOJI = ['??', '??', '??', '??', '??', '??'] as const;
+/** Emoji allowed in `reaction:send`, as escapes so the file survives any editor encoding. */
+export const REACTION_EMOJI = ['\u2764\uFE0F', '\u{1F602}', '\u{1F62E}', '\u{1F44F}', '\u{1F525}', '\u{1F62D}'] as const;
 
 export const DEFAULTS = {
   maxParticipants: 8,

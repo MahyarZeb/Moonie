@@ -159,6 +159,13 @@ describe('room events', () => {
     s = roomReducer(s, { type: 'suggestions:updated', suggestions: [item] });
     expect(s.snapshot?.suggestions).toEqual([item]);
   });
+  it('applies chat deletions', () => {
+    let s = inRoom();
+    const msg = { id: 'm1', kind: 'user' as const, text: 'hi', ts: 1 };
+    s = roomReducer(s, { type: 'chat:message', message: msg });
+    s = roomReducer(s, { type: 'chat:deleted', id: 'm1' });
+    expect(s.snapshot?.chat).toEqual([]);
+  });
   it('expires typing entries', () => {
     let s = inRoom();
     s = { ...s, typing: { b: 1000, c: 9000 } };

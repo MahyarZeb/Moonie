@@ -454,6 +454,7 @@ export class Room {
     }
     if (target.participant.role === role) return { ok: true };
     target.participant.role = role;
+    if (role !== 'member') delete target.participant.muted;
     this.endShareIfUncontrolled();
     this.broadcast({ type: 'participant:updated', participant: { ...target.participant } });
     return { ok: true };
@@ -877,6 +878,63 @@ export class Room {
       return fail('invalid_state', 'Stop sharing first');
     }
     return this.runQueue(actorId, ref, (s, c) => queueRules.skip(s, c));
+  }
+
+  // ------------------------------------------------- chat moderation, reactions
+
+  /** `chat:send`. Muted participants are refused. */
+  sendChat(actorId: string, text: string): Fail | { ok: true } {
+    const sp = this.participants.get(actorId);
+    if (!sp) return fail('not_found', 'Participant not found');
+    if (sp.participant.muted) return fail('forbidden', 'You are muted');
+    this.addChat(actorId, text);
+    return { ok: true };
+  }
+
+  /** Deletes a user chat message for everyone and from the history late joiners receive. */
+  deleteChat(actorId: string, messageId: string): Fail | { ok: true } {
+    const actor = this.roleOf(actorId);
+    if (actor === undefined || !can(actor, 'chat.moderate', this.settings)) {
+      return fail('not_host', 'Only the host or a co-host can moderate chat');
+    }
+    const idx = this.chat.findIndex((m) => m.id === messageId);
+    if (idx < 0) return fail('not_found', 'That message is gone');
+    const msg = this.chat[idx]!;
+    if (msg.kind !== 'user') return fail('invalid_state', 'Only chat messages can be deleted');
+    const authorRole = (msg.from ? this.roleOf(msg.from) : undefined) ?? 'member';
+    if (msg.from !== actorId && !canActOn(actor, authorRole, 'chat.moderate', this.settings)) {
+      return fail('forbidden', 'You cannot delete that message');
+    }
+    this.chat.splice(idx, 1);
+    this.broadcast({ type: 'chat:deleted', id: messageId });
+    return { ok: true };
+  }
+
+  /** Mutes or unmutes a participant's chat. A co-host can only act on members. */
+  muteChat(actorId: string, targetId: string, muted: boolean): Fail | { ok: true } {
+    const actor = this.roleOf(actorId);
+    if (actor === undefined || !can(actor, 'chat.moderate', this.settings)) {
+      return fail('not_host', 'Only the host or a co-host can moderate chat');
+    }
+    if (targetId === actorId) return fail('invalid_state', 'You cannot mute yourself');
+    const target = this.participants.get(targetId);
+    if (!target) return fail('not_found', 'Participant not found');
+    if (!canActOn(actor, target.participant.role, 'chat.moderate', this.settings)) {
+      return fail('forbidden', 'You cannot mute that person');
+    }
+    if ((target.participant.muted ?? false) === muted) return { ok: true };
+    if (muted) target.participant.muted = true;
+    else delete target.participant.muted;
+    if (muted && target.typing) this.setTyping(targetId, false);
+    this.broadcast({ type: 'participant:updated', participant: { ...target.participant } });
+    return { ok: true };
+  }
+
+  /** Relays an emoji reaction to everyone, sender included. Not stored. Muted participants may react. */
+  react(actorId: string, emoji: string): Fail | { ok: true } {
+    if (!this.participants.has(actorId)) return fail('not_found', 'Participant not found');
+    this.broadcast({ type: 'reaction', from: actorId, emoji });
+    return { ok: true };
   }
 
   // ------------------------------------------------------------------ games

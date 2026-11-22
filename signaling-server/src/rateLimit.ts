@@ -24,7 +24,7 @@ export class TokenBucket {
   }
 }
 
-export type BucketName = 'general' | 'chat' | 'signal' | 'lobby' | 'queueAdd';
+export type BucketName = 'general' | 'chat' | 'signal' | 'lobby' | 'queueAdd' | 'reaction';
 
 const SPECS: Record<BucketName, [number, number]> = {
   general: [60, 30],
@@ -32,6 +32,7 @@ const SPECS: Record<BucketName, [number, number]> = {
   signal: [200, 100],
   lobby: [10, 1 / 3],
   queueAdd: [5, 1 / 3],
+  reaction: [5, 2],
 };
 
 /** The per-connection set of buckets. */
@@ -45,6 +46,7 @@ export class ConnectionLimiter {
       signal: new TokenBucket(...SPECS.signal, now),
       lobby: new TokenBucket(...SPECS.lobby, now),
       queueAdd: new TokenBucket(...SPECS.queueAdd, now),
+      reaction: new TokenBucket(...SPECS.reaction, now),
     };
   }
 
@@ -54,6 +56,7 @@ export class ConnectionLimiter {
     if (!this.buckets.general.take(now)) return false;
     if (type === 'chat:send') return this.buckets.chat.take(now);
     if (type === 'queue:add') return this.buckets.queueAdd.take(now);
+    if (type === 'reaction:send') return this.buckets.reaction.take(now);
     if (type === 'room:create' || type === 'room:join' || type === 'room:peek') return this.buckets.lobby.take(now);
     return true;
   }

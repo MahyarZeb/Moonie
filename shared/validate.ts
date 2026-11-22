@@ -1,4 +1,4 @@
-import { AVATAR_IDS, LIMITS, LINK_ID_RE, SHA256_HEX_RE, THEME_IDS, VIDEO_ID_RE } from './constants';
+import { AVATAR_IDS, LIMITS, LINK_ID_RE, REACTION_EMOJI, SHA256_HEX_RE, THEME_IDS, VIDEO_ID_RE } from './constants';
 import type { GameAction, GameKind } from './games/types';
 import type { AvatarId, ClientMessage, ErrorCode, LocalFileMeta, RtcSignalData, ThemeId } from './protocol';
 import { normalizeCode } from './roomCode';
@@ -428,6 +428,19 @@ export function parseClientMessage(raw: unknown): ParseResult {
       const text = sanitizeChat(raw.text);
       return text ? ok({ type, text }) : fail('Message is empty');
     }
+    case 'chat:delete': {
+      const messageId = validId(raw.messageId);
+      return messageId ? ok({ type, messageId }) : fail('Invalid message id');
+    }
+    case 'chat:mute': {
+      const id = validId(raw.id);
+      if (!id || typeof raw.muted !== 'boolean') return fail('Invalid mute request');
+      return ok({ type, id, muted: raw.muted });
+    }
+    case 'reaction:send':
+      return typeof raw.emoji === 'string' && (REACTION_EMOJI as readonly string[]).includes(raw.emoji)
+        ? ok({ type, emoji: raw.emoji })
+        : fail('Invalid reaction');
     case 'chat:typing':
       return typeof raw.typing === 'boolean' ? ok({ type, typing: raw.typing }) : fail('Invalid typing flag');
     case 'game:open': {
