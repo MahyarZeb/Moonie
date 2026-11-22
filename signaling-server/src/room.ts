@@ -441,19 +441,88 @@ export class Room {
       positionSec: 0,
       updatedAt: now,
     };
+    this.resetHasFile(prev, next?.kind === 'local' ? next.file : null);
+  }
+
+  /** Clears every `hasFile` flag unless the new media is the same local file as the previous one. */
+  private resetHasFile(prev: MediaState | null, nextFile: LocalFileMeta | null): void {
     const sameFile =
       prev?.kind === 'local' &&
-      next?.kind === 'local' &&
-      prev.file.name === next.file.name &&
-      prev.file.size === next.file.size &&
-      prev.file.lastModified === next.file.lastModified;
-    if (!sameFile) {
-      for (const sp of this.participants.values()) {
-        if (!sp.participant.hasFile) continue;
-        sp.participant.hasFile = false;
-        this.broadcast({ type: 'participant:updated', participant: { ...sp.participant } });
-      }
+      nextFile !== null &&
+      prev.file.name === nextFile.name &&
+      prev.file.size === nextFile.size &&
+      prev.file.lastModified === nextFile.lastModified;
+    if (sameFile) return;
+    for (const sp of this.participants.values()) {
+      if (!sp.participant.hasFile) continue;
+      sp.participant.hasFile = false;
+      this.broadcast({ type: 'participant:updated', participant: { ...sp.participant } });
     }
+  }
+
+  /** `share:start` from the host. Screen shares replace any media; file streams convert the same-file media in place. */
+  startShare(
+    actorId: string,
+    msg: { source: 'screen' | 'file'; hasAudio: boolean; file?: LocalFileMeta },
+    ref?: string,
+  ): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can share');
+    if (this.shareSession) return fail('invalid_state', 'Someone is already sharing');
+    const prev = this.media;
+    const now = this.clock.now();
+    const sessionId = newId();
+    if (msg.source === 'screen') {
+      this.mediaRev += 1;
+      this.media = { kind: 'screen', rev: this.mediaRev, sharerId: actorId, sessionId, hasAudio: msg.hasAudio };
+      this.playback = { rev: this.mediaRev, status: 'paused', positionSec: 0, updatedAt: now };
+      this.resetHasFile(prev, null);
+    } else {
+      const f = msg.file;
+      if (
+        prev?.kind !== 'local' ||
+        prev.delivery !== 'same-file' ||
+        !f ||
+        f.name !== prev.file.name ||
+        f.size !== prev.file.size ||
+        f.lastModified !== prev.file.lastModified
+      ) {
+        return fail('invalid_state', 'Pick that file for the room before streaming it');
+      }
+      this.mediaRev += 1;
+      this.media = {
+        kind: 'local',
+        rev: this.mediaRev,
+        file: prev.file,
+        delivery: 'stream',
+        sharerId: actorId,
+        sessionId,
+        hasAudio: msg.hasAudio,
+      };
+      this.playback = { ...this.playback, rev: this.mediaRev };
+    }
+    this.shareSession = { sessionId, sharerId: actorId };
+    this.publishMedia(actorId, ref);
+    return { ok: true };
+  }
+
+  stopShare(actorId: string): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can stop sharing');
+    this.endShare();
+    return { ok: true };
+  }
+
+  /**
+   * Relays one WebRTC signal to its target. Only sharer<->viewer traffic inside the active session is
+   * forwarded; everything else is dropped silently. The server never reads `linkId`.
+   */
+  relaySignal(fromId: string, msg: Extract<ClientMessage, { type: 'rtc:signal' }>): boolean {
+    const share = this.shareSession;
+    if (!share || msg.sessionId !== share.sessionId || msg.to === fromId) return false;
+    if (fromId !== share.sharerId && msg.to !== share.sharerId) return false;
+    const target = this.participants.get(msg.to);
+    if (!target?.socket || !target.participant.connected) return false;
+    this.sendTo(msg.to, { type: 'rtc:signal', from: fromId, sessionId: msg.sessionId, linkId: msg.linkId, data: msg.data });
+    return true;
   }
 
   private startYouTube(videoId: string, title: string | undefined, startedBy: string): void {

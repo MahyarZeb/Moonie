@@ -296,6 +296,49 @@ async function main() {
   const pIdx = mpGuest.msgs.slice(mpMark).findIndex((m) => m.type === 'playback:state' && m.playback.status === 'paused');
   check(pIdx >= 0 && pIdx < mpTypes.indexOf('host:changed'), 'paused playback:state is broadcast before host:changed');
 
+  console.log('screen share signaling');
+  const sHost = await mk();
+  const sRoom = await createRoom(sHost);
+  const sA = await mk();
+  const sB = await mk();
+  const sAj = await join(sA, sRoom.snapshot.code, 'A');
+  const sBj = await join(sB, sRoom.snapshot.code, 'B');
+  const aId = sAj?.type === 'room:joined' ? sAj.selfId : '';
+  const bId = sBj?.type === 'room:joined' ? sBj.selfId : '';
+  const shareReply = await sHost.request({ type: 'share:start', source: 'screen', hasAudio: false });
+  const screen = shareReply?.type === 'media:state' && shareReply.media?.kind === 'screen' ? shareReply.media : null;
+  check(!!screen && screen.sharerId === sRoom.selfId, 'share:start screen replies with screen media');
+  const sid = screen?.sessionId ?? '';
+  const aSawShare = await sA.waitFor((m) => m.type === 'media:state' && m.media?.kind === 'screen');
+  check(!!aSawShare, 'viewers receive the screen media');
+
+  const sMark = { host: sHost.mark(), a: sA.mark(), b: sB.mark() };
+  sA.send({ type: 'rtc:signal', to: sRoom.selfId, sessionId: sid, linkId: 'linkA', data: { t: 'viewer-ready' } });
+  const gotReady = await sHost.waitFor((m) => m.type === 'rtc:signal' && m.from === aId && m.linkId === 'linkA', sMark.host);
+  check(!!gotReady, 'viewer-ready reaches the sharer with from and linkId');
+  sHost.send({ type: 'rtc:signal', to: aId, sessionId: sid, linkId: 'linkA', data: { t: 'candidate', candidate: null } });
+  const gotCand = await sA.waitFor((m) => m.type === 'rtc:signal' && m.from === sRoom.selfId, sMark.a);
+  check(!!gotCand, 'sharer signal reaches the targeted viewer');
+  sA.send({ type: 'rtc:signal', to: bId, sessionId: sid, linkId: 'linkA', data: { t: 'viewer-ready' } });
+  await sleep(300);
+  const leaked = (c: Client, since: number) => c.msgs.slice(since).some((m) => m.type === 'rtc:signal');
+  check(!leaked(sB, sMark.b), 'the third client receives no signals, and viewer-to-viewer is dropped');
+
+  const tMark = sHost.mark();
+  sHost.send({ type: 'host:transfer', to: aId });
+  const oldHostMedia = await sHost.waitFor((m) => m.type === 'media:state', tMark);
+  check(
+    oldHostMedia?.type === 'media:state' && oldHostMedia.media === null && !('sessionId' in oldHostMedia),
+    'old host receives media:state with media null after host:transfer',
+  );
+
+  const sh2 = await sA.request({ type: 'share:start', source: 'screen', hasAudio: false });
+  check(sh2?.type === 'media:state' && sh2.media?.kind === 'screen', 'the new host can start a share');
+  const dMark = sB.mark();
+  sA.ws.terminate();
+  const closedShare = await sB.waitFor((m) => m.type === 'media:state' && m.media === null, dMark, 2000);
+  check(!!closedShare, 'share teardown is broadcast when the sharer socket closes');
+
   console.log('transport rules');
   const evil = await new Promise<number>((resolve) => {
     const ws = new WebSocket(URL_WS, { origin: 'http://evil.example' });

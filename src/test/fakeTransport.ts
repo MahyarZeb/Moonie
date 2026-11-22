@@ -1,4 +1,13 @@
-import type { ClientMessage, CreateRoomInput, JoinedPayload, JoinRoomInput, RoomPeek, RoomSnapshot, ServerMessage } from '@shared/protocol';
+import type {
+  ClientMessage,
+  CreateRoomInput,
+  JoinedPayload,
+  JoinRoomInput,
+  RoomPeek,
+  RoomSnapshot,
+  RtcSignalData,
+  ServerMessage,
+} from '@shared/protocol';
 import {
   TransportError,
   type ConnectionStatus,
@@ -91,11 +100,19 @@ export class FakeTransport implements SignalingTransport {
     this.sent.push(msg);
   }
 
-  async request(): Promise<ServerMessage> {
+  /** Set in a test to answer `request()` calls. */
+  requestImpl: ((msg: ClientMessage) => Promise<ServerMessage>) | null = null;
+
+  async request(msg: ClientMessage): Promise<ServerMessage> {
+    if (this.requestImpl) return this.requestImpl(msg);
     throw new TransportError('network', 'not implemented in the fake');
   }
 
-  sendSignal() {}
+  signals: { to: string; sessionId: string; linkId: string; data: RtcSignalData }[] = [];
+
+  sendSignal(to: string, sessionId: string, linkId: string, data: RtcSignalData) {
+    this.signals.push({ to, sessionId, linkId, data });
+  }
 
   onMessage(handler: (m: ServerMessage) => void) {
     this.handlers.add(handler);

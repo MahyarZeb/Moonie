@@ -16,6 +16,9 @@ export function RoomProvider({ children, transport }: { children: ReactNode; tra
 
   useEffect(() => controller.start(), [controller]);
 
+  const toast = useToast();
+  useEffect(() => controller.setNotifier((message) => toast.show(message)), [controller, toast]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       if (Object.keys(controller.store.getState().typing).length > 0) {

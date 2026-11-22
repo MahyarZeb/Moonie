@@ -1,6 +1,7 @@
 import type { CreateRoomInput, JoinRoomInput } from '@shared/protocol';
 import { clearSession, loadIdentity, readSession, saveIdentity, writeSession } from '@/lib/identity/identity';
 import { TransportError, type SignalingTransport } from '@/lib/signaling/types';
+import { ShareBroadcaster } from '@/lib/webrtc/ShareBroadcaster';
 import type { RoomError } from './reducer';
 import type { RoomStore } from './roomStore';
 
@@ -27,6 +28,29 @@ export class RoomController {
   get transport(): SignalingTransport {
     if (!this.resolved) this.resolved = this.getTransport();
     return this.resolved;
+  }
+
+  /** Shows a short info message (the provider wires this to a toast). */
+  private notifier: (message: string) => void = () => undefined;
+
+  /** Sets the info-message sink. Returns a function that removes it. */
+  setNotifier(fn: (message: string) => void): () => void {
+    this.notifier = fn;
+    return () => {
+      if (this.notifier === fn) this.notifier = () => undefined;
+    };
+  }
+
+  private broadcaster: ShareBroadcaster | null = null;
+
+  /** The tab's single screen-share broadcaster, created on first use. It outlives the Screen tab. */
+  get share(): ShareBroadcaster {
+    this.broadcaster ??= new ShareBroadcaster({
+      transport: this.transport,
+      store: this.store,
+      onEnded: (message) => this.notifier(message),
+    });
+    return this.broadcaster;
   }
 
   /** Subscribes the transport to the store. Returns the cleanup function. */

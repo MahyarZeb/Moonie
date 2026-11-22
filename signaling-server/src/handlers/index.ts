@@ -4,6 +4,7 @@ import { handleCreate, handleJoin, handlePeek } from './lobby';
 import { handleMediaEnded, handleMediaError, handleMediaSet } from './media';
 import { handlePlayback } from './playback';
 import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder } from './queue';
+import { handleRtcSignal, handleShareStart, handleShareStop } from './share';
 import { handleKick, handleLeave, handlePing, handleProfile, handleSettings, handleTransfer } from './room';
 
 /** Routes one validated client message. Later phases add cases for media, chat, games and rtc. */
@@ -55,6 +56,12 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleQueueReorder(conn, room, pid, msg);
     case 'queue:play':
       return handleQueuePlay(conn, room, pid, msg);
+    case 'share:start':
+      return handleShareStart(conn, room, pid, msg);
+    case 'share:stop':
+      return handleShareStop(conn, room, pid, msg);
+    case 'rtc:signal':
+      return handleRtcSignal(ctx, room, pid, msg);
     default:
       return conn.error('bad_request', 'This message is not supported yet', msg.ref);
   }

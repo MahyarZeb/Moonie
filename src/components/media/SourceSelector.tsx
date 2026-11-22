@@ -1,27 +1,36 @@
 'use client';
 
-import { ListPlus, Play, MonitorPlay } from 'lucide-react';
+import { useState } from 'react';
+import { ListPlus, Play, MonitorPlay, ScreenShare } from 'lucide-react';
 import { Tabs } from '@/components/ui/Tabs';
 import { useRoomController } from '@/lib/room/RoomProvider';
+import { ScreenSharePanel } from './ScreenSharePanel';
 import { YouTubeUrlForm } from './YouTubeUrlForm';
 
-type Source = 'youtube';
+type Source = 'youtube' | 'screen';
 
 /**
  * Host-only picker for what the room watches. Only sources that exist are listed:
- * screen share and local files join the tabs in their own phases.
+ * local files join the tabs in their own phase.
  */
 export function SourceSelector() {
   const controller = useRoomController();
+  const [source, setSource] = useState<Source>('youtube');
 
   return (
     <div className="card-soft space-y-3 p-4">
       <Tabs<Source>
         label="Media source"
-        value="youtube"
-        onChange={() => undefined}
-        tabs={[{ id: 'youtube', label: 'YouTube', icon: <MonitorPlay size={16} aria-hidden /> }]}
+        value={source}
+        onChange={setSource}
+        tabs={[
+          { id: 'youtube', label: 'YouTube', icon: <MonitorPlay size={16} aria-hidden /> },
+          { id: 'screen', label: 'Screen', icon: <ScreenShare size={16} aria-hidden /> },
+        ]}
       />
+      {source === 'screen' ? (
+        <ScreenSharePanel />
+      ) : (
       <YouTubeUrlForm
         actions={[
           {
@@ -48,6 +57,7 @@ export function SourceSelector() {
           },
         ]}
       />
+      )}
     </div>
   );
 }

@@ -1,17 +1,30 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import { Crown, UserMinus, UserCog } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { IconButton } from '@/components/ui/IconButton';
 import { useRoom, useRoomController } from '@/lib/room/RoomProvider';
 
+const NO_LINKS: Record<string, RTCPeerConnectionState> = {};
+
+function describeLink(state: RTCPeerConnectionState): string {
+  if (state === 'connected') return 'Watching your screen';
+  if (state === 'failed') return "Couldn't connect";
+  if (state === 'disconnected') return 'Connection hiccup…';
+  return 'Connecting…';
+}
+
 export function ParticipantList() {
   const controller = useRoomController();
   const snapshot = useRoom((s) => s.snapshot);
   const selfId = useRoom((s) => s.selfId);
+  const share = controller.share;
+  const links = useSyncExternalStore(share.subscribe, () => share.getState().links, () => NO_LINKS);
   if (!snapshot) return null;
   const isHost = snapshot.hostId === selfId;
+  const sharerId = snapshot.media?.kind === 'screen' ? snapshot.media.sharerId : null;
   const connected = snapshot.participants.filter((p) => p.connected).length;
 
   return (
@@ -34,6 +47,10 @@ export function ParticipantList() {
                 )}
               </div>
               {!p.connected && <span className="text-xs text-ink-soft">Reconnecting…</span>}
+              {p.connected && p.id === sharerId && <span className="text-xs text-ink-soft">Sharing their screen</span>}
+              {p.connected && p.id !== selfId && links[p.id] && (
+                <span className="text-xs text-ink-soft">{describeLink(links[p.id]!)}</span>
+              )}
             </div>
             {isHost && p.id !== selfId && (
               <div className="flex gap-1">
