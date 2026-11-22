@@ -530,6 +530,95 @@ async function main() {
   open.length = 0;
   await sleep(150);
 
+  console.log('roles, co-host playback, moderation and reactions');
+  const rHost = await mk();
+  const rRoom = await createRoom(rHost);
+  const rCo = await mk();
+  const rMem = await mk();
+  const rcj = await join(rCo, rRoom.snapshot.code, 'Co');
+  const rmj = await join(rMem, rRoom.snapshot.code, 'Mem');
+  const coId = rcj?.type === 'room:joined' ? rcj.selfId : '';
+  const memId = rmj?.type === 'room:joined' ? rmj.selfId : '';
+  check(rmj?.type === 'room:joined' && rmj.snapshot.participants.find((p) => p.id === memId)?.role === 'member', 'joiners are members');
+
+  const spoof = await rMem.request({ type: 'role:set', to: memId, role: 'co_host' });
+  check(spoof?.type === 'error' && spoof.code === 'not_host', 'a member cannot promote itself');
+  const promoted = await rHost.waitFor((m) => m.type === 'participant:updated', rHost.mark(), 50);
+  void promoted;
+  const pMark = rMem.mark();
+  rHost.send({ type: 'role:set', to: coId, role: 'co_host' });
+  const sawPromo = await rMem.waitFor((m) => m.type === 'participant:updated' && m.participant.id === coId && m.participant.role === 'co_host', pMark);
+  check(!!sawPromo, 'promotion is broadcast with the new role');
+
+  const coSet = await rCo.request({ type: 'media:set', media: { kind: 'youtube', videoId: V1 } });
+  check(coSet?.type === 'media:state' && coSet.media?.kind === 'youtube', 'a co-host can set the video');
+  const rRev = coSet?.type === 'media:state' && coSet.media ? coSet.media.rev : -1;
+  const coPlay = await rCo.request({ type: 'playback:command', rev: rRev, action: 'seek', positionSec: 12 });
+  void coPlay;
+  const seen = await rHost.waitFor((m) => m.type === 'playback:state' && m.playback.positionSec === 12 && m.playback.by === coId);
+  check(!!seen, 'a co-host seek reaches the host stamped with the co-host id (echo guard)');
+  const memPlay = await rMem.request({ type: 'playback:command', rev: rRev, action: 'play', positionSec: 0 });
+  check(memPlay?.type === 'error' && memPlay.code === 'not_host', 'a member cannot control playback');
+  const memSkip = await rMem.request({ type: 'queue:skip' });
+  check(memSkip?.type === 'error', 'a member cannot skip');
+  const coSettings = await rCo.request({ type: 'room:settings', autoNext: false });
+  check(coSettings?.type === 'error', 'a co-host cannot change room settings');
+  const coRole = await rCo.request({ type: 'role:set', to: memId, role: 'co_host' });
+  check(coRole?.type === 'error', 'a co-host cannot manage roles');
+  const coXfer = await rCo.request({ type: 'host:transfer', to: memId });
+  check(coXfer?.type === 'error', 'a co-host cannot transfer the host');
+
+  const chat1 = await rHost.request({ type: 'chat:send', text: 'to be deleted' });
+  void chat1;
+  const delTarget = await rMem.waitFor((m) => m.type === 'chat:message' && m.message.text === 'to be deleted');
+  const delId = delTarget?.type === 'chat:message' ? delTarget.message.id : '';
+  const coDelHost = await rCo.request({ type: 'chat:delete', messageId: delId });
+  check(coDelHost?.type === 'error', 'a co-host cannot delete the host\'s message');
+  const memMark = rMem.mark();
+  const hostDel = await rHost.request({ type: 'chat:delete', messageId: delId });
+  void hostDel;
+  check(!!(await rMem.waitFor((m) => m.type === 'chat:deleted' && m.id === delId, memMark)), 'chat:delete is broadcast');
+  const rLate = await mk();
+  const rlj = await join(rLate, rRoom.snapshot.code, 'Late');
+  check(rlj?.type === 'room:joined' && !rlj.snapshot.chat.some((m) => m.id === delId), 'a late joiner does not see the deleted message');
+  check(rlj?.type === 'room:joined' && rlj.snapshot.participants.some((p) => p.id === coId && p.role === 'co_host'), 'a late joiner sees current roles');
+
+  const coMute = await rCo.request({ type: 'chat:mute', id: memId, muted: true });
+  void coMute;
+  check(!!(await rMem.waitFor((m) => m.type === 'participant:updated' && m.participant.id === memId && m.participant.muted === true)), 'a co-host can mute a member');
+  const mutedChat = await rMem.request({ type: 'chat:send', text: 'can you hear me' });
+  check(mutedChat?.type === 'error' && mutedChat.code === 'forbidden', 'a muted member cannot chat');
+  const rxMark = rHost.mark();
+  rMem.send({ type: 'reaction:send', emoji: '\u{1F525}' });
+  check(!!(await rHost.waitFor((m) => m.type === 'reaction' && m.from === memId, rxMark)), 'a muted member can still react');
+  rMem.send({ type: 'reaction:send', emoji: 'not-allowed' });
+  await sleep(150);
+  check(!rHost.msgs.some((m) => m.type === 'reaction' && m.emoji === 'not-allowed'), 'an emoji outside the list is not relayed');
+  const hostMuteCo = await rHost.request({ type: 'chat:mute', id: rRoom.selfId, muted: true });
+  check(hostMuteCo?.type === 'error', 'nobody can mute the host');
+
+  const sugMark = rHost.mark();
+  const sug = await rMem.request({ type: 'queue:add', videoId: V2 });
+  check(sug?.type === 'suggestions:updated', 'a member add is a suggestion and does not start playback');
+  const sNotice = await rHost.waitFor((m) => m.type === 'queue:notice' && m.kind === 'suggested', sugMark);
+  check(!!sNotice, 'controllers get a suggestion notice');
+  const coResume = await rCo.request({ type: 'playback:command', rev: rRev, action: 'play', positionSec: 12 });
+  void coResume;
+  check(rHost.msgs.slice(sugMark).every((m) => m.type !== 'media:state' || m.media?.kind === 'youtube'), 'the suggestion did not change the current media');
+
+  const xMark = rMem.mark();
+  rHost.send({ type: 'host:transfer', to: coId });
+  check(!!(await rMem.waitFor((m) => m.type === 'host:changed' && m.hostId === coId, xMark)), 'host transfer is broadcast');
+  const oldHost = await rHost.request({ type: 'room:settings', autoNext: false });
+  check(oldHost?.type === 'error', 'the former host is now a co-host and cannot change settings');
+  const newHostSettings = await rCo.request({ type: 'room:settings', autoNext: false });
+  check(newHostSettings?.type !== 'error', 'the new host can change settings');
+  const lMark2 = rMem.mark();
+  rCo.ws.terminate();
+  const succ = await rMem.waitFor((m) => m.type === 'host:changed', lMark2, 4000);
+  check(succ?.type === 'host:changed' && succ.hostId === rRoom.selfId, 'when the host drops, the longest-connected co-host takes over');
+  for (const c of [rHost, rCo, rMem, rLate]) c.ws.terminate();
+  await sleep(100);
   console.log('transport rules');
   const evil = await new Promise<number>((resolve) => {
     const ws = new WebSocket(URL_WS, { origin: 'http://evil.example' });
