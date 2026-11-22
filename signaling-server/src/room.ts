@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { LIMITS } from '../../shared/constants';
 import { DEFAULT_SETTINGS, can, canActOn, type Action } from '../../shared/permissions';
 import { applyCommand, expectedPosition } from '../../shared/playback';
+import * as queueRules from '../../shared/queue';
 import type {
   AvatarId,
   ChatMessage,
@@ -89,6 +90,8 @@ export class Room {
   media: MediaState | null = null;
   playback: PlaybackState;
   queue: QueueItem[] = [];
+  /** Member videos waiting for approval. */
+  suggestions: QueueItem[] = [];
   /** Authoritative game state. Clients only ever see gameView(id), which redacts hidden information. */
   gameState: GameState | null = null;
   /** Float source for dice. Defaults to a CSPRNG; tests can replace it. */
@@ -164,6 +167,7 @@ export class Room {
       media: this.media,
       playback: this.playback,
       queue: this.queue,
+      suggestions: this.suggestions,
       game: this.gameState ? viewGame(this.gameState, viewerId ?? '') : null,
       chat: this.chat.slice(-LIMITS.chatHistory),
       serverTime: this.clock.now(),
@@ -708,10 +712,10 @@ export class Room {
     if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
     if (rev !== m.rev) return fail('stale', 'That was for an earlier video');
     if (failed) this.addSystemChat("Skipped a video that couldn't be played 🙈");
-    const next = this.queue.shift();
-    if (next) {
-      this.startYouTube(next.videoId, next.title, next.addedBy);
-      this.publishMedia();
+    // With autoNext off, or an empty queue, nothing starts and playback pauses at the end.
+    const res = queueRules.finish(this.queueState(), this.settings);
+    if (res.effects.length > 0) {
+      this.commitQueue(res.state, res.effects);
       return { ok: true };
     }
     const now = this.clock.now();
@@ -727,62 +731,118 @@ export class Room {
     return { ok: true };
   }
 
-  queueAdd(actorId: string, videoId: string, title: string | undefined, ref?: string): Fail | { ok: true } {
-    const last = this.queue.at(-1);
-    const duplicate = last
-      ? last.videoId === videoId
-      : this.media?.kind === 'youtube' && this.media.videoId === videoId;
-    if (duplicate) return fail('invalid_state', 'That video is already next');
-    if (this.queue.length >= LIMITS.queueMax) return fail('invalid_state', 'The queue is full');
-    if (this.queue.filter((q) => q.addedBy === actorId).length >= LIMITS.queuePerUser) {
-      return fail('forbidden', `You can have up to ${LIMITS.queuePerUser} videos waiting in the queue`);
+  private queueState(): queueRules.QueueState {
+    return { queue: this.queue, suggestions: this.suggestions };
+  }
+
+  private queueContext(actorId: string): queueRules.QueueContext | null {
+    const role = this.roleOf(actorId);
+    if (role === undefined) return null;
+    const m = this.media;
+    return {
+      actorId,
+      role,
+      settings: this.settings,
+      currentVideoId: m?.kind === 'youtube' ? m.videoId : null,
+      idle: m === null,
+      now: this.clock.now(),
+      newId,
+    };
+  }
+
+  private publishSuggestions(requesterId?: string, ref?: string): void {
+    const msg: ServerMessage = { type: 'suggestions:updated', suggestions: this.suggestions };
+    for (const id of this.participants.keys()) {
+      this.sendTo(id, ref && id === requesterId ? { ...msg, ref } : msg);
     }
-    if (this.media === null && this.queue.length === 0) {
-      this.startYouTube(videoId, title, actorId);
-      this.publishMedia(actorId, ref);
-      return { ok: true };
+  }
+
+  /**
+   * Applies a successful queue result: stores the new lists, runs start/stop effects, publishes what changed
+   * and sends notices. Exactly one message to the requester carries `ref`.
+   */
+  private commitQueue(next: queueRules.QueueState, effects: queueRules.QueueEffect[], actorId?: string, ref?: string): void {
+    const queueChanged = next.queue !== this.queue;
+    const suggestionsChanged = next.suggestions !== this.suggestions;
+    this.queue = next.queue;
+    this.suggestions = next.suggestions;
+    let mediaChanged = false;
+    for (const e of effects) {
+      if (e.type === 'start') {
+        this.startYouTube(e.item.videoId, e.item.title, e.item.addedBy);
+        mediaChanged = true;
+      } else if (e.type === 'stop') {
+        this.applyMedia(null);
+        mediaChanged = true;
+      }
     }
-    this.queue.push({ id: newId(), videoId, ...(title ? { title } : {}), addedBy: actorId, addedAt: this.clock.now() });
-    this.publishQueue(actorId, ref);
+    let refUsed = false;
+    const refFor = (): string | undefined => {
+      if (refUsed) return undefined;
+      refUsed = true;
+      return ref;
+    };
+    if (mediaChanged) this.publishMedia(actorId, refFor());
+    else if (queueChanged) this.publishQueue(actorId, refFor());
+    if (suggestionsChanged) this.publishSuggestions(actorId, refFor());
+    if (!refUsed && ref && actorId) this.replyQueue(actorId, ref);
+    for (const e of effects) if (e.type === 'notice') this.sendNotice(actorId, e.kind, e.item);
+  }
+
+  private sendNotice(actorId: string | undefined, kind: 'added' | 'suggested', item: QueueItem): void {
+    const by = this.participants.get(item.addedBy)?.participant.name ?? 'Someone';
+    const msg: ServerMessage = { type: 'queue:notice', kind, itemId: item.id, videoId: item.videoId, ...(item.title ? { title: item.title } : {}), by };
+    for (const [id, sp] of this.participants) {
+      if (id === actorId) continue;
+      if (kind === 'suggested' && !can(sp.participant.role, 'queue.manage', this.settings)) continue;
+      this.sendTo(id, msg);
+    }
+  }
+
+  private runQueue(
+    actorId: string,
+    ref: string | undefined,
+    rule: (state: queueRules.QueueState, ctx: queueRules.QueueContext) => queueRules.QueueResult,
+  ): Fail | { ok: true } {
+    const ctx = this.queueContext(actorId);
+    if (!ctx) return fail('not_found', 'Participant not found');
+    const res = rule(this.queueState(), ctx);
+    if (!res.ok) return res;
+    this.commitQueue(res.state, res.effects, actorId, ref);
     return { ok: true };
   }
 
+  /**
+   * `queue:add`. Member adds become suggestions (approval on) or queue entries (approval off) and never
+   * start playback. Host and co-host adds go to the queue, and start playing when the room is idle.
+   */
+  queueAdd(actorId: string, videoId: string, title: string | undefined, ref?: string): Fail | { ok: true } {
+    return this.runQueue(actorId, ref, (s, c) => queueRules.addVideo(s, c, videoId, title));
+  }
+
+  queueApprove(actorId: string, itemId: string, position: 'end' | 'next' | undefined, ref?: string): Fail | { ok: true } {
+    return this.runQueue(actorId, ref, (s, c) => queueRules.approve(s, c, itemId, position));
+  }
+
+  /** Removes a queue item or rejects/withdraws a suggestion. */
   queueRemove(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
-    const item = this.queue.find((q) => q.id === itemId);
-    if (!item) return fail('not_found', 'That video is no longer in the queue');
-    if (!this.allowed(actorId, 'queue.manage') && item.addedBy !== actorId) {
-      return fail('forbidden', 'Only a host, a co-host or the person who added it can remove it');
-    }
-    this.queue = this.queue.filter((q) => q.id !== itemId);
-    this.publishQueue(actorId, ref);
-    return { ok: true };
+    return this.runQueue(actorId, ref, (s, c) => queueRules.removeItem(s, c, itemId));
   }
 
   queueReorder(actorId: string, itemId: string, toIndex: number, ref?: string): Fail | { ok: true } {
-    if (!this.allowed(actorId, 'queue.manage')) return fail('not_host', 'Only the host or a co-host can reorder the queue');
-    const from = this.queue.findIndex((q) => q.id === itemId);
-    if (from < 0) return fail('not_found', 'That video is no longer in the queue');
-    const to = Math.max(0, Math.min(this.queue.length - 1, toIndex));
-    if (to === from) {
-      this.replyQueue(actorId, ref);
-      return { ok: true };
-    }
-    const next = [...this.queue];
-    const [item] = next.splice(from, 1);
-    next.splice(to, 0, item!);
-    this.queue = next;
-    this.publishQueue(actorId, ref);
-    return { ok: true };
+    return this.runQueue(actorId, ref, (s, c) => queueRules.reorder(s, c, itemId, toIndex));
   }
 
   queuePlay(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
-    if (!this.allowed(actorId, 'queue.manage')) return fail('not_host', 'Only the host or a co-host can start a queued video');
-    const item = this.queue.find((q) => q.id === itemId);
-    if (!item) return fail('not_found', 'That video is no longer in the queue');
-    this.queue = this.queue.filter((q) => q.id !== itemId);
-    this.startYouTube(item.videoId, item.title, item.addedBy);
-    this.publishMedia(actorId, ref);
-    return { ok: true };
+    return this.runQueue(actorId, ref, (s, c) => queueRules.playItem(s, c, itemId));
+  }
+
+  /** Plays the next queued video, or ends playback when the queue is empty. */
+  queueSkip(actorId: string, ref?: string): Fail | { ok: true } {
+    if (this.allowed(actorId, 'queue.manage') && this.queue.length === 0 && this.shareSession) {
+      return fail('invalid_state', 'Stop sharing first');
+    }
+    return this.runQueue(actorId, ref, (s, c) => queueRules.skip(s, c));
   }
 
   // ------------------------------------------------------------------ games

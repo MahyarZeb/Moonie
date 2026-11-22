@@ -160,27 +160,50 @@ describe('playback:command', () => {
 });
 
 describe('queue', () => {
-  it('the first add with no media starts playing and replies media:state', async () => {
+  it('the first add by the host with no media starts playing and replies media:state', async () => {
+    const t = makeCtx();
+    const host = await createRoom(t);
+    const guest = await join(t, host.code);
+    await t.send(host.conn, { type: 'queue:add', ref: 'q1', videoId: V1 });
+    expect(host.socket.last('media:state')).toMatchObject({ ref: 'q1', media: { kind: 'youtube', videoId: V1, startedBy: host.id } });
+    expect(guest.socket.last('media:state')?.ref).toBeUndefined();
+    expect(room(t, host.code).queue).toEqual([]);
+  });
+
+  it('a member add in an idle room becomes a suggestion and never starts playback', async () => {
     const t = makeCtx();
     const host = await createRoom(t);
     const guest = await join(t, host.code);
     await t.send(guest.conn, { type: 'queue:add', ref: 'q1', videoId: V1 });
-    expect(guest.socket.last('media:state')).toMatchObject({ ref: 'q1', media: { kind: 'youtube', videoId: V1, startedBy: guest.id } });
-    expect(host.socket.last('media:state')?.ref).toBeUndefined();
+    expect(guest.socket.last('suggestions:updated')).toMatchObject({ ref: 'q1' });
+    expect(host.socket.last('suggestions:updated')?.ref).toBeUndefined();
+    expect(room(t, host.code).media).toBeNull();
     expect(room(t, host.code).queue).toEqual([]);
+    expect(room(t, host.code).suggestions).toMatchObject([{ videoId: V1, addedBy: guest.id }]);
   });
 
-  it('later adds queue up and the requester gets the ref copy', async () => {
+  it('later member adds wait for approval and the requester gets the ref copy', async () => {
     const t = makeCtx();
     const host = await createRoom(t);
     const guest = await join(t, host.code);
     await t.send(host.conn, { type: 'media:set', media: { kind: 'youtube', videoId: V1 } });
     await t.send(guest.conn, { type: 'queue:add', ref: 'q2', videoId: V2, title: 'Cats' });
-    expect(guest.socket.last('queue:updated')!.ref).toBe('q2');
-    expect(host.socket.last('queue:updated')!.ref).toBeUndefined();
-    expect(host.socket.last('queue:updated')!.queue[0]).toMatchObject({ videoId: V2, title: 'Cats', addedBy: guest.id });
+    expect(guest.socket.last('suggestions:updated')!.ref).toBe('q2');
+    expect(host.socket.last('suggestions:updated')!.ref).toBeUndefined();
+    expect(host.socket.last('suggestions:updated')!.suggestions[0]).toMatchObject({ videoId: V2, title: 'Cats', addedBy: guest.id });
+    expect(room(t, host.code).queue).toEqual([]);
   });
 
+  it('with approval off a member add goes to the queue and does not start an idle room', async () => {
+    const t = makeCtx();
+    const host = await createRoom(t);
+    const guest = await join(t, host.code);
+    room(t, host.code).settings.requireApproval = false;
+    await t.send(guest.conn, { type: 'queue:add', ref: 'q3', videoId: V2 });
+    expect(guest.socket.last('queue:updated')!.ref).toBe('q3');
+    expect(host.socket.last('queue:updated')!.queue[0]).toMatchObject({ videoId: V2, addedBy: guest.id });
+    expect(room(t, host.code).media).toBeNull();
+  });
   it('rejects a consecutive duplicate and a duplicate of the current media', async () => {
     const t = makeCtx();
     const host = await createRoom(t);
@@ -233,6 +256,7 @@ describe('queue', () => {
     const host = await createRoom(t);
     const a = await join(t, host.code, 'A');
     const b = await join(t, host.code, 'B');
+    room(t, host.code).settings.requireApproval = false;
     await t.send(host.conn, { type: 'media:set', media: { kind: 'youtube', videoId: V1 } });
     await t.send(a.conn, { type: 'queue:add', videoId: V2 });
     await t.send(a.conn, { type: 'queue:add', videoId: V3 });

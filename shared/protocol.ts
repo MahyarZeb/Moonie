@@ -92,6 +92,8 @@ export interface RoomSnapshot {
   media: MediaState | null;
   playback: PlaybackState;
   queue: QueueItem[];
+  /** Member suggestions waiting for approval. */
+  suggestions: QueueItem[];
   game: GameView | null;
   chat: ChatMessage[];
   serverTime: number;
@@ -158,6 +160,8 @@ export type ClientMessage = { ref?: string } & (
   | { type: 'media:ended'; rev: number }
   | { type: 'media:error'; rev: number; code: number }
   | { type: 'queue:add'; videoId: string; title?: string }
+  | { type: 'queue:approve'; itemId: string; position?: 'end' | 'next' }
+  | { type: 'queue:skip' }
   | { type: 'queue:remove'; itemId: string }
   | { type: 'queue:reorder'; itemId: string; toIndex: number }
   | { type: 'queue:play'; itemId: string }
@@ -199,6 +203,9 @@ export type ServerMessage =
   | { type: 'media:state'; media: MediaState | null; playback: PlaybackState; queue: QueueItem[]; ref?: string }
   | { type: 'playback:state'; playback: PlaybackState; ref?: string }
   | { type: 'queue:updated'; queue: QueueItem[]; ref?: string }
+  | { type: 'suggestions:updated'; suggestions: QueueItem[]; ref?: string }
+  /** An event, not state: late joiners never receive it. y is the adder's display name. */
+  | { type: 'queue:notice'; kind: 'added' | 'suggested'; itemId: string; videoId: string; title?: string; by: string }
   | { type: 'rtc:signal'; from: string; sessionId: string; linkId: string; data: RtcSignalData }
   | { type: 'chat:message'; message: ChatMessage }
   | { type: 'chat:typing'; id: string; typing: boolean }

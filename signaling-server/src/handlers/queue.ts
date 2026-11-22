@@ -23,3 +23,13 @@ export function handleQueuePlay(conn: Conn, room: Room, pid: string, msg: Msg<'q
   const res = room.queuePlay(pid, msg.itemId, msg.ref);
   if (!res.ok) conn.error(res.code, res.message, msg.ref);
 }
+
+export function handleQueueApprove(conn: Conn, room: Room, pid: string, msg: Msg<'queue:approve'>): void {
+  const res = room.queueApprove(pid, msg.itemId, msg.position, msg.ref);
+  if (!res.ok) conn.error(res.code, res.message, msg.ref);
+}
+
+export function handleQueueSkip(conn: Conn, room: Room, pid: string, msg: Msg<'queue:skip'>): void {
+  const res = room.queueSkip(pid, msg.ref);
+  if (!res.ok) conn.error(res.code, res.message, msg.ref);
+}

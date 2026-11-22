@@ -382,6 +382,14 @@ export function parseClientMessage(raw: unknown): ParseResult {
       const itemId = validId(raw.itemId);
       return itemId ? ok({ type, itemId }) : fail('Invalid item id');
     }
+    case 'queue:approve': {
+      const itemId = validId(raw.itemId);
+      if (!itemId) return fail('Invalid item id');
+      if (raw.position === undefined) return ok({ type, itemId });
+      return raw.position === 'end' || raw.position === 'next' ? ok({ type, itemId, position: raw.position }) : fail('Invalid position');
+    }
+    case 'queue:skip':
+      return ok({ type });
     case 'queue:reorder': {
       const itemId = validId(raw.itemId);
       if (!itemId || typeof raw.toIndex !== 'number' || !Number.isInteger(raw.toIndex)) return fail('Invalid reorder');

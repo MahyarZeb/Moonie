@@ -181,6 +181,8 @@ export function roomReducer(state: RoomClientState, event: RoomEvent): RoomClien
       return { ...state, snapshot: { ...snapshot, playback: event.playback } };
     case 'queue:updated':
       return { ...state, snapshot: { ...snapshot, queue: event.queue } };
+    case 'suggestions:updated':
+      return { ...state, snapshot: { ...snapshot, suggestions: event.suggestions } };
     case 'chat:message': {
       const chat = [...snapshot.chat, event.message].slice(-100);
       const typing = { ...state.typing };

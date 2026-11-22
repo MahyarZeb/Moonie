@@ -221,3 +221,21 @@ describe('roles and settings messages', () => {
     expect(isOk({ type: 'room:settings', coHostsCanKick: 1 })).toBe(false);
   });
 });
+
+describe('queue, moderation and reaction messages', () => {
+  it('queue:approve and queue:skip keep only whitelisted fields', () => {
+    expect(parse({ type: 'queue:approve', itemId: 'i1', position: 'next', by: 'x' })).toEqual({
+      ok: true,
+      msg: { type: 'queue:approve', itemId: 'i1', position: 'next' },
+    });
+    expect(parse({ type: 'queue:approve', itemId: 'i1' })).toEqual({ ok: true, msg: { type: 'queue:approve', itemId: 'i1' } });
+    expect(isOk({ type: 'queue:approve', itemId: 'i1', position: 'top' })).toBe(false);
+    expect(isOk({ type: 'queue:approve' })).toBe(false);
+    expect(parse({ type: 'queue:skip', role: 'host' })).toEqual({ ok: true, msg: { type: 'queue:skip' } });
+  });
+
+  it('queue:add drops a spoofed adder and role', () => {
+    const r = parse({ type: 'queue:add', videoId: 'dQw4w9WgXcQ', addedBy: 'host', role: 'host' });
+    expect(r).toEqual({ ok: true, msg: { type: 'queue:add', videoId: 'dQw4w9WgXcQ' } });
+  });
+});

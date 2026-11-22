@@ -26,6 +26,7 @@ const snapshot = (over: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   media: null,
   playback: { rev: 0, status: 'paused', positionSec: 0, updatedAt: 0 },
   queue: [],
+  suggestions: [],
   game: null,
   chat: [],
   serverTime: 0,
@@ -152,6 +153,12 @@ describe('room events', () => {
     expect(s.typing).toEqual({});
   });
 
+  it('applies suggestion updates', () => {
+    let s = inRoom();
+    const item = { id: 'i1', videoId: 'aaaaaaaaaaa', addedBy: 'b', addedAt: 1 };
+    s = roomReducer(s, { type: 'suggestions:updated', suggestions: [item] });
+    expect(s.snapshot?.suggestions).toEqual([item]);
+  });
   it('expires typing entries', () => {
     let s = inRoom();
     s = { ...s, typing: { b: 1000, c: 9000 } };

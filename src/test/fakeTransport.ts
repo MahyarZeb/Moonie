@@ -40,6 +40,7 @@ export function makeSnapshot(code = 'ABCD23'): RoomSnapshot {
     media: null,
     playback: { rev: 0, status: 'paused', positionSec: 0, updatedAt: 0 },
     queue: [],
+    suggestions: [],
     game: null,
     chat: [],
     serverTime: 0,

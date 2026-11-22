@@ -5,7 +5,14 @@ import { handleGameAction, handleGameClose, handleGameOpen } from './game';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
 import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } from './media';
 import { handlePlayback } from './playback';
-import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder } from './queue';
+import {
+  handleQueueAdd,
+  handleQueueApprove,
+  handleQueuePlay,
+  handleQueueRemove,
+  handleQueueReorder,
+  handleQueueSkip,
+} from './queue';
 import { handleRtcSignal, handleShareStart, handleShareStop } from './share';
 import { handleKick, handleLeave, handlePing, handleProfile, handleRole, handleSettings, handleTransfer } from './room';
 
@@ -56,6 +63,10 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handlePlayback(conn, room, pid, msg);
     case 'queue:add':
       return handleQueueAdd(conn, room, pid, msg);
+    case 'queue:approve':
+      return handleQueueApprove(conn, room, pid, msg);
+    case 'queue:skip':
+      return handleQueueSkip(conn, room, pid, msg);
     case 'queue:remove':
       return handleQueueRemove(conn, room, pid, msg);
     case 'queue:reorder':
