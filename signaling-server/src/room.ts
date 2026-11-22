@@ -1,10 +1,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { LIMITS } from '../../shared/constants';
-import { expectedPosition } from '../../shared/playback';
+import { applyCommand, expectedPosition } from '../../shared/playback';
 import type {
   AvatarId,
   ChatMessage,
+  ClientMessage,
   ErrorCode,
+  LocalFileMeta,
   MediaState,
   Participant,
   PlaybackState,
@@ -55,6 +57,13 @@ export interface Profile {
   displayName: string;
   avatar: AvatarId;
 }
+
+/** Media that `media:set` and the queue can create. Screen shares and file streams come from `share:start`. */
+type NewMedia =
+  | { kind: 'youtube'; videoId: string; title?: string; startedBy: string }
+  | { kind: 'local'; file: LocalFileMeta; delivery: 'same-file' };
+
+export type SetMediaInput = Extract<ClientMessage, { type: 'media:set' }>['media'];
 
 const newId = () => randomUUID().replace(/-/g, '').slice(0, 12);
 
@@ -379,6 +388,195 @@ export class Room {
     if (patch.theme) this.theme = patch.theme;
     if (password !== undefined) this.passwordHash = password;
     this.broadcast({ type: 'room:settings', name: this.name, theme: this.theme, hasPassword: this.hasPassword });
+    return { ok: true };
+  }
+
+  // ----------------------------------------------------------- media, queue
+
+  /** Sends `media:state` to everyone. The requester's copy carries its `ref`. */
+  private publishMedia(requesterId?: string, ref?: string): void {
+    const msg: ServerMessage = { type: 'media:state', media: this.media, playback: this.playback, queue: this.queue };
+    for (const id of this.participants.keys()) {
+      this.sendTo(id, ref && id === requesterId ? { ...msg, ref } : msg);
+    }
+  }
+
+  private publishPlayback(requesterId?: string, ref?: string): void {
+    const msg: ServerMessage = { type: 'playback:state', playback: this.playback };
+    for (const id of this.participants.keys()) {
+      this.sendTo(id, ref && id === requesterId ? { ...msg, ref } : msg);
+    }
+  }
+
+  private publishQueue(requesterId?: string, ref?: string): void {
+    const msg: ServerMessage = { type: 'queue:updated', queue: this.queue };
+    for (const id of this.participants.keys()) {
+      this.sendTo(id, ref && id === requesterId ? { ...msg, ref } : msg);
+    }
+  }
+
+  /** Replies to the requester only (a successful request that changed nothing). */
+  private replyMedia(id: string, ref?: string): void {
+    this.sendTo(id, { type: 'media:state', media: this.media, playback: this.playback, queue: this.queue, ...(ref ? { ref } : {}) });
+  }
+
+  private replyQueue(id: string, ref?: string): void {
+    this.sendTo(id, { type: 'queue:updated', queue: this.queue, ...(ref ? { ref } : {}) });
+  }
+
+  /**
+   * Replaces the current media (never a screen/stream; those come from `share:start`).
+   * Ends any share first, bumps `mediaRev`, sets the initial playback and resets `hasFile`
+   * when the file identity changes. Does not broadcast.
+   */
+  private applyMedia(next: NewMedia | null): void {
+    if (this.shareSession) this.endShare();
+    const prev = this.media;
+    const now = this.clock.now();
+    this.mediaRev += 1;
+    this.media = next ? { ...next, rev: this.mediaRev } : null;
+    this.playback = {
+      rev: this.mediaRev,
+      status: next?.kind === 'youtube' ? 'playing' : 'paused',
+      positionSec: 0,
+      updatedAt: now,
+    };
+    const sameFile =
+      prev?.kind === 'local' &&
+      next?.kind === 'local' &&
+      prev.file.name === next.file.name &&
+      prev.file.size === next.file.size &&
+      prev.file.lastModified === next.file.lastModified;
+    if (!sameFile) {
+      for (const sp of this.participants.values()) {
+        if (!sp.participant.hasFile) continue;
+        sp.participant.hasFile = false;
+        this.broadcast({ type: 'participant:updated', participant: { ...sp.participant } });
+      }
+    }
+  }
+
+  private startYouTube(videoId: string, title: string | undefined, startedBy: string): void {
+    this.applyMedia({ kind: 'youtube', videoId, ...(title ? { title } : {}), startedBy });
+  }
+
+  setMedia(actorId: string, media: SetMediaInput, ref?: string): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can change what is playing');
+    const cur = this.media;
+    const same =
+      media === null
+        ? cur === null
+        : media.kind === 'youtube'
+          ? cur?.kind === 'youtube' && cur.videoId === media.videoId
+          : cur?.kind === 'local' &&
+            cur.delivery === 'same-file' &&
+            cur.file.name === media.file.name &&
+            cur.file.size === media.file.size &&
+            cur.file.lastModified === media.file.lastModified;
+    if (same) {
+      this.replyMedia(actorId, ref);
+      return { ok: true };
+    }
+    if (media === null) this.applyMedia(null);
+    else if (media.kind === 'youtube') this.startYouTube(media.videoId, media.title, actorId);
+    else this.applyMedia({ kind: 'local', file: media.file, delivery: 'same-file' });
+    this.publishMedia(actorId, ref);
+    return { ok: true };
+  }
+
+  playbackCommand(
+    actorId: string,
+    cmd: { rev: number; action: 'play' | 'pause' | 'seek'; positionSec: number; hostServerTime?: number },
+    ref?: string,
+  ): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can control playback');
+    const m = this.media;
+    if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
+    if (cmd.rev !== m.rev) return fail('stale', 'That command was for an earlier video');
+    this.playback = applyCommand(this.playback, cmd, this.clock.now());
+    this.publishPlayback(actorId, ref);
+    return { ok: true };
+  }
+
+  /** `media:ended` and `media:error` from the host: play the next queue item or pause at the end. */
+  mediaFinished(actorId: string, rev: number, failed: boolean): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can do that');
+    const m = this.media;
+    if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
+    if (rev !== m.rev) return fail('stale', 'That was for an earlier video');
+    if (failed) this.addSystemChat("Skipped a video that couldn't be played 🙈");
+    const next = this.queue.shift();
+    if (next) {
+      this.startYouTube(next.videoId, next.title, next.addedBy);
+      this.publishMedia();
+      return { ok: true };
+    }
+    const now = this.clock.now();
+    this.playback = {
+      rev: m.rev,
+      status: 'paused',
+      positionSec: m.kind === 'local' && m.file.durationSec !== undefined
+        ? m.file.durationSec
+        : expectedPosition(this.playback, now),
+      updatedAt: now,
+    };
+    this.publishPlayback();
+    return { ok: true };
+  }
+
+  queueAdd(actorId: string, videoId: string, title: string | undefined, ref?: string): Fail | { ok: true } {
+    const last = this.queue.at(-1);
+    const duplicate = last
+      ? last.videoId === videoId
+      : this.media?.kind === 'youtube' && this.media.videoId === videoId;
+    if (duplicate) return fail('invalid_state', 'That video is already next');
+    if (this.queue.length >= LIMITS.queueMax) return fail('invalid_state', 'The queue is full');
+    if (this.queue.filter((q) => q.addedBy === actorId).length >= LIMITS.queuePerUser) {
+      return fail('forbidden', `You can have up to ${LIMITS.queuePerUser} videos waiting in the queue`);
+    }
+    if (this.media === null && this.queue.length === 0) {
+      this.startYouTube(videoId, title, actorId);
+      this.publishMedia(actorId, ref);
+      return { ok: true };
+    }
+    this.queue.push({ id: newId(), videoId, ...(title ? { title } : {}), addedBy: actorId, addedAt: this.clock.now() });
+    this.publishQueue(actorId, ref);
+    return { ok: true };
+  }
+
+  queueRemove(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
+    const item = this.queue.find((q) => q.id === itemId);
+    if (!item) return fail('not_found', 'That video is no longer in the queue');
+    if (actorId !== this.hostId && item.addedBy !== actorId) return fail('forbidden', 'Only the host or the person who added it can remove it');
+    this.queue = this.queue.filter((q) => q.id !== itemId);
+    this.publishQueue(actorId, ref);
+    return { ok: true };
+  }
+
+  queueReorder(actorId: string, itemId: string, toIndex: number, ref?: string): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can reorder the queue');
+    const from = this.queue.findIndex((q) => q.id === itemId);
+    if (from < 0) return fail('not_found', 'That video is no longer in the queue');
+    const to = Math.max(0, Math.min(this.queue.length - 1, toIndex));
+    if (to === from) {
+      this.replyQueue(actorId, ref);
+      return { ok: true };
+    }
+    const next = [...this.queue];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item!);
+    this.queue = next;
+    this.publishQueue(actorId, ref);
+    return { ok: true };
+  }
+
+  queuePlay(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
+    if (actorId !== this.hostId) return fail('not_host', 'Only the host can start a queued video');
+    const item = this.queue.find((q) => q.id === itemId);
+    if (!item) return fail('not_found', 'That video is no longer in the queue');
+    this.queue = this.queue.filter((q) => q.id !== itemId);
+    this.startYouTube(item.videoId, item.title, item.addedBy);
+    this.publishMedia(actorId, ref);
     return { ok: true };
   }
 

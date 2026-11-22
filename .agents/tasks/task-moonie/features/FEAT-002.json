@@ -1,0 +1,23 @@
+{
+    "id":  "FEAT-002",
+    "type":  "feat",
+    "description":  "P2: YouTube parser, IFrame player, host-controlled sync with drift correction, server media/playback/queue handlers, QueuePanel. Depends on FEAT-001.",
+    "status":  "completed",
+    "steps":  [
+                  "Do plan.md tasks P2-1 through P2-4 in order (design.md section 8 and section 6 media/queue bullets).",
+                  "Verify the motion/react import path and IFrame API CSP needs."
+              ],
+    "acceptance_criteria":  [
+                                "parseYouTubeUrl tests cover every row of design section 16",
+                                "Non-host playback:command returns not_host and leaves state unchanged (server test and smoke)",
+                                "Late joiner snapshot has media, position, queue",
+                                "Phase committed"
+                            ],
+    "verification":  [
+                         "npm run typecheck; npm run lint; npm test; npm run build",
+                         "npm --prefix signaling-server test; npm --prefix signaling-server run build",
+                         "background server + npm --prefix signaling-server run smoke"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "Done. Server: Room.setMedia/playbackCommand/mediaFinished/queue* with ref-copy replies, handlers in signaling-server/src/handlers/{media,playback,queue}.ts; shared applyCommand (host time clamped to [now-2s, now]). Client: parse, loadApi, useYouTubePlayer, syncController (decideSync/detectSeek pure + FollowerSync), YouTubePlayer, QueuePanel, SourceSelector, YouTubeUrlForm; Queue tab in Sidebar and MobileTabBar. Verified: motion/react import path works (motion 14.14.0, build passes). lucide-react 1.77 has no Youtube brand icon (MonitorPlay used). CSP needs for P7-2: script-src https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; img-src https://i.ytimg.com; connect-src https://www.youtube.com (oEmbed titles, falls back to \u0027YouTube video (ID)\u0027 on failure). next.config.ts has no headers yet (P7-2). Not browser-verified: YT player host option youtube-nocookie.com, autoplay overlay, seek detection, oEmbed CORS. Gate: root typecheck/lint/test(159)/build OK; server typecheck/test(73)/build OK; smoke 40/40 against a background server (stopped)."
+}

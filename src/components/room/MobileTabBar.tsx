@@ -1,14 +1,15 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Tv, Users } from 'lucide-react';
+import { ListVideo, Tv, Users } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
-export type MobileTab = 'watch' | 'people';
+export type MobileTab = 'watch' | 'people' | 'queue';
 
 const TABS: { id: MobileTab; label: string; icon: ReactNode }[] = [
   { id: 'watch', label: 'Watch', icon: <Tv size={20} /> },
   { id: 'people', label: 'People', icon: <Users size={20} /> },
+  { id: 'queue', label: 'Queue', icon: <ListVideo size={20} /> },
 ];
 
 /** Bottom tab bar for phones. Panels are shown one at a time. Hidden from the lg breakpoint up. */

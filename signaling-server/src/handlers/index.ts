@@ -1,6 +1,9 @@
 import type { ClientMessage } from '../../../shared/protocol';
 import { Conn, type HandlerContext } from '../connection';
 import { handleCreate, handleJoin, handlePeek } from './lobby';
+import { handleMediaEnded, handleMediaError, handleMediaSet } from './media';
+import { handlePlayback } from './playback';
+import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder } from './queue';
 import { handleKick, handleLeave, handlePing, handleProfile, handleSettings, handleTransfer } from './room';
 
 /** Routes one validated client message. Later phases add cases for media, chat, games and rtc. */
@@ -36,6 +39,22 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleTransfer(conn, room, pid, msg);
     case 'host:kick':
       return handleKick(conn, room, pid, msg);
+    case 'media:set':
+      return handleMediaSet(conn, room, pid, msg);
+    case 'media:ended':
+      return handleMediaEnded(conn, room, pid, msg);
+    case 'media:error':
+      return handleMediaError(conn, room, pid, msg);
+    case 'playback:command':
+      return handlePlayback(conn, room, pid, msg);
+    case 'queue:add':
+      return handleQueueAdd(conn, room, pid, msg);
+    case 'queue:remove':
+      return handleQueueRemove(conn, room, pid, msg);
+    case 'queue:reorder':
+      return handleQueueReorder(conn, room, pid, msg);
+    case 'queue:play':
+      return handleQueuePlay(conn, room, pid, msg);
     default:
       return conn.error('bad_request', 'This message is not supported yet', msg.ref);
   }

@@ -24,7 +24,11 @@ export function RoomView() {
         <div className={cn('min-w-0 space-y-4', tab !== 'watch' && 'hidden lg:block')}>
           <MediaStage />
         </div>
-        <Sidebar className={cn('min-h-[300px] lg:block', tab !== 'people' && 'hidden')} />
+        <Sidebar
+          className={cn('min-h-[300px] lg:block', tab === 'watch' && 'hidden')}
+          panel={tab === 'queue' ? 'queue' : 'people'}
+          onPanelChange={setTab}
+        />
       </main>
       <MobileTabBar value={tab} onChange={setTab} />
     </div>

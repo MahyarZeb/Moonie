@@ -1,16 +1,45 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Armchair } from 'lucide-react';
+import { Armchair, MonitorPlay } from 'lucide-react';
 import { useRoom } from '@/lib/room/RoomProvider';
 import { selectIsHost } from '@/lib/room/selectors';
 import { getRoomTheme } from '@/lib/theme/roomThemes';
+import { useVideoTitle } from '@/lib/youtube/useVideoTitle';
+import { SourceSelector } from './SourceSelector';
+import { YouTubePlayer, type YouTubeMedia } from './YouTubePlayer';
 
-/**
- * The main player area. Media sources (YouTube, screen share, local files) mount here as they are added.
- * For now it renders the empty state, which is what a room with no media always shows.
- */
+/** The main player area: the current media on top and, for the host, the source selector below. */
 export function MediaStage() {
+  const media = useRoom((s) => s.snapshot?.media ?? null);
+  const isHost = useRoom(selectIsHost);
+
+  return (
+    <div className="space-y-4">
+      {media?.kind === 'youtube' ? (
+        <>
+          <YouTubePlayer key={isHost ? 'host' : 'follower'} media={media} />
+          <NowPlaying media={media} />
+        </>
+      ) : (
+        <EmptyStage />
+      )}
+      {isHost && <SourceSelector />}
+    </div>
+  );
+}
+
+function NowPlaying({ media }: { media: YouTubeMedia }) {
+  const title = useVideoTitle(media.videoId, media.title);
+  return (
+    <p className="flex items-center gap-2 px-1 text-sm font-semibold text-ink-soft">
+      <MonitorPlay size={16} aria-hidden />
+      <span className="truncate">Now playing: {title}</span>
+    </p>
+  );
+}
+
+function EmptyStage() {
   const theme = useRoom((s) => s.snapshot?.theme);
   const isHost = useRoom(selectIsHost);
   const info = getRoomTheme(theme);
@@ -28,8 +57,8 @@ export function MediaStage() {
         </h2>
         <p className="mt-2 text-ink-soft">
           {isHost
-            ? 'You are the host. Invite your friends and get cozy. Whatever you play will show up right here.'
-            : 'Nothing is playing yet. The host will pick something to watch, and it will show up right here.'}
+            ? 'You are the host. Paste a YouTube link below to start watching together.'
+            : 'Nothing is playing yet. Add a YouTube link in the Queue tab, or wait for the host to pick something.'}
         </p>
       </motion.div>
     </section>

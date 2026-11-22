@@ -222,6 +222,80 @@ async function main() {
   check(!!gotKicked, 'kicked participant receives kicked');
   check((await k.waitClosed()) === 4001, 'kicked socket is closed with 4001');
 
+  console.log('youtube playback and queue');
+  const V1 = 'dQw4w9WgXcQ';
+  const V2 = 'aaaaaaaaaaa';
+  const V3 = 'bbbbbbbbbbb';
+  const yHost = await mk();
+  const yRoom = await createRoom(yHost);
+  const yGuest = await mk();
+  await join(yGuest, yRoom.snapshot.code, 'Y');
+  const setReply = await yHost.request({ type: 'media:set', media: { kind: 'youtube', videoId: V1 } });
+  check(
+    setReply?.type === 'media:state' && setReply.media?.kind === 'youtube' && setReply.playback.status === 'playing',
+    'host media:set starts youtube playing and replies with media:state',
+  );
+  const rev = setReply?.type === 'media:state' && setReply.media ? setReply.media.rev : -1;
+  const guestSawMedia = await yGuest.waitFor((m) => m.type === 'media:state' && m.media?.kind === 'youtube');
+  check(!!guestSawMedia && !('ref' in guestSawMedia && guestSawMedia.ref), 'guest receives media:state without a ref');
+
+  const gMark = yGuest.mark();
+  yHost.send({ type: 'playback:command', rev, action: 'seek', positionSec: 42 });
+  const seekMsg = await yGuest.waitFor((m) => m.type === 'playback:state' && m.playback.positionSec === 42, gMark);
+  check(!!seekMsg, 'host playback:command is accepted and broadcast');
+
+  const denied = await yGuest.request({ type: 'playback:command', rev, action: 'pause', positionSec: 1 });
+  check(denied?.type === 'error' && denied.code === 'not_host', 'non-host playback:command returns not_host');
+  const stillPlaying = await mk();
+  const sj = await join(stillPlaying, yRoom.snapshot.code, 'Check');
+  check(
+    sj?.type === 'room:joined' && sj.snapshot.playback.status === 'playing' && sj.snapshot.playback.positionSec >= 42,
+    'state is unchanged after the rejected command',
+  );
+
+  const q1 = await yGuest.request({ type: 'queue:add', videoId: V2, title: 'Second' });
+  check(q1?.type === 'queue:updated' && q1.queue.length === 1, 'queue:add replies queue:updated with the item');
+  const q2 = await yHost.request({ type: 'queue:add', videoId: V3 });
+  check(q2?.type === 'queue:updated' && q2.queue.length === 2, 'host can queue another video');
+  const dupAdd = await yHost.request({ type: 'queue:add', videoId: V3 });
+  check(dupAdd?.type === 'error' && dupAdd.code === 'invalid_state', 'consecutive duplicate queue:add is invalid_state');
+
+  const lateY = await mk();
+  const lj = await join(lateY, yRoom.snapshot.code, 'LateY');
+  check(
+    lj?.type === 'room:joined' &&
+      lj.snapshot.media?.kind === 'youtube' &&
+      lj.snapshot.playback.status === 'playing' &&
+      lj.snapshot.playback.positionSec >= 42 &&
+      lj.snapshot.queue.length === 2,
+    'late joiner snapshot has media, position and queue',
+  );
+
+  const queued = q2?.type === 'queue:updated' ? q2.queue : [];
+  const playReply = await yHost.request({ type: 'queue:play', itemId: queued[1]?.id ?? '' });
+  check(
+    playReply?.type === 'media:state' &&
+      playReply.media?.kind === 'youtube' &&
+      playReply.media.videoId === V3 &&
+      playReply.queue.length === 1,
+    'queue:play removes the item and makes it current',
+  );
+  const rmReply = await yHost.request({ type: 'queue:remove', itemId: queued[0]?.id ?? '' });
+  check(rmReply?.type === 'queue:updated' && rmReply.queue.length === 0, 'queue:remove empties the queue');
+
+  console.log('host migration while playing');
+  const mpHost = await mk();
+  const mpRoom = await createRoom(mpHost);
+  const mpGuest = await mk();
+  await join(mpGuest, mpRoom.snapshot.code, 'MP');
+  await mpHost.request({ type: 'media:set', media: { kind: 'youtube', videoId: V1 } });
+  const mpMark = mpGuest.mark();
+  mpHost.ws.terminate();
+  await mpGuest.waitFor((m) => m.type === 'host:changed', mpMark, 4000);
+  const mpTypes = mpGuest.msgs.slice(mpMark).map((m) => m.type);
+  const pIdx = mpGuest.msgs.slice(mpMark).findIndex((m) => m.type === 'playback:state' && m.playback.status === 'paused');
+  check(pIdx >= 0 && pIdx < mpTypes.indexOf('host:changed'), 'paused playback:state is broadcast before host:changed');
+
   console.log('transport rules');
   const evil = await new Promise<number>((resolve) => {
     const ws = new WebSocket(URL_WS, { origin: 'http://evil.example' });
