@@ -7,6 +7,7 @@ import type { Config } from './config';
 import { Conn, idleReason, type HandlerContext } from './connection';
 import { dispatch } from './handlers';
 import type { Logger } from './log';
+import { createOEmbedResolver, type MetadataResolver } from './metadata';
 import { isOriginAllowed } from './origin';
 import { clientIp } from './rateLimit';
 import { RoomRegistry } from './registry';
@@ -29,8 +30,13 @@ function reject(socket: Duplex, status: number, text: string): void {
 }
 
 /** Builds the HTTP + WebSocket server. Nothing runs until `listen()`. */
-export function createSignalingServer(config: Config, log: Logger, clock: Clock = systemClock): RunningServer {
-  const registry = new RoomRegistry(clock, config, log);
+export function createSignalingServer(
+  config: Config,
+  log: Logger,
+  clock: Clock = systemClock,
+  metadata: MetadataResolver = createOEmbedResolver(),
+): RunningServer {
+  const registry = new RoomRegistry(clock, config, log, undefined, metadata);
   const ctx: HandlerContext = { registry, config, clock, log };
   const conns = new Set<Conn>();
   const ipCounts = new Map<string, number>();

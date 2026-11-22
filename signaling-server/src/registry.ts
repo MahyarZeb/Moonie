@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from '../../shared/constants';
 import type { ThemeId } from '../../shared/protocol';
 import type { Logger } from './log';
+import { nullMetadata, type MetadataResolver } from './metadata';
 import { PasswordGuard } from './rateLimit';
 import { Room, type Clock, type RoomOptions } from './room';
 
@@ -17,6 +18,7 @@ export class RoomRegistry {
     private readonly opts: RoomOptions & { maxRooms: number },
     private readonly log: Logger,
     private readonly pickIndex: (max: number) => number = (max) => randomInt(max),
+    private readonly metadata: MetadataResolver = nullMetadata,
   ) {}
 
   get size(): number {
@@ -39,7 +41,7 @@ export class RoomRegistry {
     for (let attempt = 0; attempt < 10; attempt++) {
       const code = this.generateCode();
       if (this.rooms.has(code)) continue;
-      const room = new Room(code, name, theme, this.clock, this.opts, this.log);
+      const room = new Room(code, name, theme, this.clock, this.opts, this.log, this.metadata);
       this.rooms.set(code, room);
       this.log.info('room created', { room: code });
       return { ok: true, room };

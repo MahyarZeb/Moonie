@@ -24,6 +24,7 @@ import { createGame, ludo, reduceGame, removeGamePlayer, seatedIds, viewGame, ty
 import type { Actor, GameKind } from '../../shared/games/types';
 import { parseGameAction } from '../../shared/validate';
 import type { Logger } from './log';
+import { nullMetadata, type MetadataResolver } from './metadata';
 import type { PasswordHash } from './password';
 
 export interface Clock {
@@ -110,6 +111,7 @@ export class Room {
     private readonly clock: Clock,
     private readonly opts: RoomOptions,
     private readonly log: Logger,
+    private readonly metadata: MetadataResolver = nullMetadata,
   ) {
     this.code = code;
     this.name = name;
@@ -665,6 +667,7 @@ export class Room {
 
   private startYouTube(videoId: string, title: string | undefined, startedBy: string): void {
     this.applyMedia({ kind: 'youtube', videoId, ...(title ? { title } : {}), startedBy });
+    this.fetchTitle(videoId);
   }
 
   setMedia(actorId: string, media: SetMediaInput, ref?: string): Fail | { ok: true } {
@@ -750,6 +753,34 @@ export class Room {
     };
   }
 
+  /** Looks up a title on the metadata resolver and applies it when it lands. Never blocks or throws. */
+  private fetchTitle(videoId: string): void {
+    this.metadata
+      .resolveTitle(videoId)
+      .then((title) => {
+        if (title) this.applyResolvedTitle(videoId, title);
+      })
+      .catch(() => undefined);
+  }
+
+  private applyResolvedTitle(videoId: string, title: string): void {
+    const cur = this.queueState();
+    const next = queueRules.applyTitle(cur, videoId, title);
+    if (next !== cur) {
+      const queueChanged = next.queue !== cur.queue;
+      const suggestionsChanged = next.suggestions !== cur.suggestions;
+      this.queue = next.queue;
+      this.suggestions = next.suggestions;
+      if (queueChanged) this.publishQueue();
+      if (suggestionsChanged) this.publishSuggestions();
+    }
+    const m = this.media;
+    if (m?.kind === 'youtube' && m.videoId === videoId && m.title !== title) {
+      this.media = { ...m, title };
+      this.publishMedia();
+    }
+  }
+
   private publishSuggestions(requesterId?: string, ref?: string): void {
     const msg: ServerMessage = { type: 'suggestions:updated', suggestions: this.suggestions };
     for (const id of this.participants.keys()) {
@@ -815,9 +846,12 @@ export class Room {
   /**
    * `queue:add`. Member adds become suggestions (approval on) or queue entries (approval off) and never
    * start playback. Host and co-host adds go to the queue, and start playing when the room is idle.
+   * The client title is a hint; the server resolves the real title afterwards.
    */
   queueAdd(actorId: string, videoId: string, title: string | undefined, ref?: string): Fail | { ok: true } {
-    return this.runQueue(actorId, ref, (s, c) => queueRules.addVideo(s, c, videoId, title));
+    const res = this.runQueue(actorId, ref, (s, c) => queueRules.addVideo(s, c, videoId, title));
+    if (res.ok) this.fetchTitle(videoId);
+    return res;
   }
 
   queueApprove(actorId: string, itemId: string, position: 'end' | 'next' | undefined, ref?: string): Fail | { ok: true } {

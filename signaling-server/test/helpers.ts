@@ -3,6 +3,7 @@ import { Conn, type HandlerContext } from '../src/connection';
 import { loadConfig, type Config } from '../src/config';
 import { dispatch } from '../src/handlers';
 import { silentLogger } from '../src/log';
+import type { MetadataResolver } from '../src/metadata';
 import { RoomRegistry } from '../src/registry';
 import type { Clock, SocketLike } from '../src/room';
 import { parseClientMessage } from '../../shared/validate';
@@ -37,6 +38,19 @@ export class FakeSocket implements SocketLike {
   }
 }
 
+/**
+ * Metadata resolver for tests. 'titles' maps video id to title; unknown ids resolve to null.
+ * Lookups are recorded in 'calls'.
+ */
+export class FakeMetadata implements MetadataResolver {
+  titles = new Map<string, string>();
+  calls: string[] = [];
+  resolveTitle(videoId: string): Promise<string | null> {
+    this.calls.push(videoId);
+    return Promise.resolve(this.titles.get(videoId) ?? null);
+  }
+}
+
 export function makeEnv(overrides: Record<string, string> = {}): Config {
   return loadConfig({ ALLOWED_ORIGINS: 'http://test', TRUST_PROXY_HOPS: '0', ...overrides });
 }
@@ -44,7 +58,8 @@ export function makeEnv(overrides: Record<string, string> = {}): Config {
 export function makeCtx(overrides: Record<string, string> = {}) {
   const clock = new FakeClock();
   const config = makeEnv(overrides);
-  const registry = new RoomRegistry(clock, config, silentLogger);
+  const metadata = new FakeMetadata();
+  const registry = new RoomRegistry(clock, config, silentLogger, undefined, metadata);
   const ctx: HandlerContext = { registry, config, clock, log: silentLogger };
   let id = 1;
   const connect = (ip = '1.1.1.1') => {
@@ -66,7 +81,7 @@ export function makeCtx(overrides: Record<string, string> = {}) {
     c.conn.closed = true;
     if (c.conn.room && c.conn.pid) c.conn.room.disconnect(c.conn.pid, c.socket);
   };
-  return { clock, config, registry, ctx, connect, send, drop };
+  return { clock, config, registry, ctx, connect, send, drop, metadata };
 }
 
 export const profile = (name = 'Mochi', avatar = 'cat') => ({ displayName: name, avatar });
