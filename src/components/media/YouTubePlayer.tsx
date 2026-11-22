@@ -133,6 +133,9 @@ export function YouTubePlayer({ media }: { media: YouTubeMedia }) {
         if (pb.by === selfId) return;
         // Applying someone else's change must not echo back as our own command.
         hostSuppressUntil.current = Date.now() + SUPPRESS_MS;
+        // Move the seek detector's reference point too, so the jump we are about to apply is not read as our own seek.
+        const now = Date.now();
+        lastPoll.current = { pos: expectedPosition(pb, serverNow(controller.transport)), at: now, quietUntil: now + 1500 };
       }
       sync.sync();
     });

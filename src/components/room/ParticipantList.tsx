@@ -73,19 +73,19 @@ export function ParticipantList() {
       </p>
       <ul className="space-y-2">
         {snapshot.participants.map((p) => (
-          <li key={p.id} className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2">
+          <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-surface-2 px-3 py-2">
             <Avatar avatar={p.avatar} dim={!p.connected} />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-[7rem] flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="truncate font-bold">{p.name}</span>
                 {p.id === selfId && <span className="text-xs font-semibold text-ink-soft">(you)</span>}
                 {p.id === snapshot.hostId && (
-                  <Badge tone="pink">
+                  <Badge tone="pink" className="whitespace-nowrap">
                     <Crown size={11} aria-hidden /> Host
                   </Badge>
                 )}
                 {p.id !== snapshot.hostId && p.role === 'co_host' && (
-                  <Badge tone="lavender">
+                  <Badge tone="lavender" className="whitespace-nowrap">
                     <Star size={11} aria-hidden /> Co-host
                   </Badge>
                 )}
@@ -100,7 +100,7 @@ export function ParticipantList() {
                 <span className="text-xs text-ink-soft">{describeLink(links[p.id]!)}</span>
               )}
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className="ml-auto flex shrink-0 gap-1">
               {can(p, 'room.roles') && p.role === 'member' && (
                 <IconButton label={`Promote ${p.name} to co-host`} className="h-8 w-8" onClick={() => setPending({ kind: 'promote', who: p })}>
                   <Star size={15} />

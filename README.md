@@ -101,10 +101,25 @@ STUN alone fails on some networks (strict NAT, corporate firewalls). For reliabl
 - `getDisplayMedia` needs HTTPS (or localhost) and a desktop browser. Mobile browsers generally cannot share a screen.
 - YouTube videos whose owners disable embedding cannot be played.
 
-## Handing over the host role
+## Roles, queue and moderation
+Every participant is a host, a co-host or a member. The server decides what each role can do (`shared/permissions.ts`, enforced in `signaling-server/src/room.ts`); the UI only hides buttons.
 
-The host controls playback. The host can pass the role to another participant from the participant list. If the host disconnects, the server waits `HOST_GRACE_MS` for them to return and then promotes the next participant.
+| | Host | Co-host | Member |
+|---|---|---|---|
+| Watch, chat, react, play games | yes | yes | yes |
+| Add a video | to the queue | to the queue | suggestion (or queue when approval is off) |
+| Play, pause, seek, change video, skip | yes | yes | no |
+| Approve, reject, reorder, remove queue items | yes | yes | only withdraw their own |
+| Start or stop a screen share or file stream, manage games | yes | yes | no |
+| Delete chat messages, mute and unmute | anyone | members only | no |
+| Remove people | yes | members only, if the setting allows | no |
+| Promote or demote co-hosts, transfer host, change room settings | yes | no | no |
 
+Room rules (host only, in Settings): approval required for suggestions (default on), auto-play next video (default on), co-hosts can remove people (default on). A member's add never starts or interrupts playback. Deleted chat messages are removed from the history late joiners receive. A muted member cannot chat but can still react. Mutes are tied to the participant, so someone who leaves and rejoins is no longer muted (there are no accounts).
+
+When the host leaves or times out (`HOST_GRACE_MS`), the longest-connected co-host becomes host, or the longest-connected member if there is no co-host. A former host who returns joins as a co-host. A transfer makes the old host a co-host.
+
+Titles are looked up by the signaling server through YouTube's oEmbed endpoint (fixed host, validated 11-character id, 3 s timeout, 16 KB cap, results cached in memory). The server needs outbound HTTPS for this; without it titles fall back to what the client sent. Thumbnails are built from the video id in the browser.
 ## Swapping the transport
 
 All room traffic goes through the `SignalingTransport` interface in `src/lib/signaling/types.ts`. To use another real-time service, implement that interface and return it from `getTransport()` in `src/lib/signaling/index.ts`. The server-side room logic in `signaling-server/src` is the reference for what a replacement must do (authoritative room state, request and reply with `ref`, WebRTC signal relay).
