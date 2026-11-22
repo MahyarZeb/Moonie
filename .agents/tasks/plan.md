@@ -130,10 +130,11 @@ Decisions recorded (design is approved, so none re-decided):
 
 ## P8: Final verification (writes `.agents/tasks/verification.md`)
 
-- [ ] P8-1. Clean install: `npm run setup` (root and `signaling-server`), then `npm run typecheck; npm run lint; npm test` and the server's `typecheck`, `test`.
-- [ ] P8-2. `npm run build` (Next) and `npm --prefix signaling-server run build`.
-- [ ] P8-3. Start the signaling server (`node signaling-server/dist/server.js` with test env: `ALLOWED_ORIGINS`, `HOST_GRACE_MS=500`, `SWEEP_INTERVAL_MS=100`, `IDLE_MS=1000`) and `npm start` for Next as background processes (`Start-Process` with redirected logs). Record PIDs. Poll `/health` until ready.
-- [ ] P8-4. Run the full smoke script: create, join with/without password, wrong password rejected, late-joiner snapshot, host-only playback enforcement, chat broadcast + history, game move validation including garbage payloads, host migration with paused playback broadcast, targeted `rtc:signal` only to target, old-host `media:state` teardown. Any failure: fix, rebuild, rerun.
-- [ ] P8-5. Optional browser check: try `npx --yes playwright` / `npx --yes puppeteer` (no devDependency added; browser download may fail). If it works, screenshot landing and a room in light and dark into `.agents/tasks/screenshots/` and assert zero console errors. If not possible, record that and why.
-- [ ] P8-6. Stop all background processes by recorded PIDs; confirm ports are free.
-- [ ] P8-7. Write `.agents/tasks/verification.md`: commands run with results, file structure, how to run, what was verified, what could NOT be verified (cross-network screen share and TURN, YouTube playback, `captureStream` per browser, `.mov`, real mobile layouts). Commit `docs: verification report`.
+- [x] P8-1. Clean install: `npm run setup` (root and `signaling-server`), then `npm run typecheck; npm run lint; npm test` and the server's `typecheck`, `test`.
+- [x] P8-2. `npm run build` (Next) and `npm --prefix signaling-server run build`.
+- [x] P8-3. Start the signaling server (`node signaling-server/dist/server.js` with test env: `ALLOWED_ORIGINS`, `HOST_GRACE_MS=500`, `SWEEP_INTERVAL_MS=100`, `IDLE_MS=1000`) and `npm start` for Next as background processes (`Start-Process` with redirected logs). Record PIDs. Poll `/health` until ready.
+- [x] P8-4. Run the full smoke script: create, join with/without password, wrong password rejected, late-joiner snapshot, host-only playback enforcement, chat broadcast + history, game move validation including garbage payloads, host migration with paused playback broadcast, targeted `rtc:signal` only to target, old-host `media:state` teardown. Any failure: fix, rebuild, rerun.
+- [x] P8-5. Optional browser check: try `npx --yes playwright` / `npx --yes puppeteer` (no devDependency added; browser download may fail). If it works, screenshot landing and a room in light and dark into `.agents/tasks/screenshots/` and assert zero console errors. If not possible, record that and why.
+- [x] P8-6. Stop all background processes by recorded PIDs; confirm ports are free.
+- [x] P8-7. Write `.agents/tasks/verification.md`: commands run with results, file structure, how to run, what was verified, what could NOT be verified (cross-network screen share and TURN, YouTube playback, `captureStream` per browser, `.mov`, real mobile layouts). Commit `docs: verification report`.
+

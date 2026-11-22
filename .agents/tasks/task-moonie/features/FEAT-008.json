@@ -1,0 +1,12 @@
+{
+  "id": "FEAT-008",
+  "type": "test",
+  "description": "P8: final verification run from a clean install, background servers, full ws smoke, optional headless screenshots, stop processes, write verification.md. Depends on all earlier features. Fix any defects found and commit fixes.",
+  "status": "completed",
+  "steps": ["Do plan.md tasks P8-1 through P8-7 in order.", "Browser check only via npx without adding a devDependency; if impossible, say so with the reason in verification.md."],
+  "acceptance_criteria": ["npm run setup, typecheck, lint, tests, and both builds pass", "Smoke script covers every item listed in P8-4 and exits 0", "No background node processes remain", ".agents/tasks/verification.md exists and lists what could not be verified"],
+  "verification": ["npm run typecheck; npm run lint; npm test; npm run build", "npm --prefix signaling-server run typecheck; npm --prefix signaling-server test; npm --prefix signaling-server run build", "background servers + npm --prefix signaling-server run smoke; then confirm ports free"],
+  "blocked_reason": null,
+  "findings": "All gates, both builds, 80/80 smoke pass. Fixed missing favicon (added src/app/icon.svg). Playwright check: zero console errors, light/dark screenshots. Processes stopped, ports free. See .agents/tasks/verification.md."
+}
+
