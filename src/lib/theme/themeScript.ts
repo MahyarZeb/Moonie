@@ -1,0 +1,2 @@
+/** Runs before first paint so the page never flashes the wrong mode. Kept as a string for an inline <script>. */
+export const themeScript = `(function(){try{var s=localStorage.getItem('moonie-theme');var d=s==='dark'||((!s||s==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light';}catch(e){}})();`;

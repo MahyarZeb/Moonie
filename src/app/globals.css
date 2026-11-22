@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens as RGB triples so Tailwind can apply alpha. */
+:root {
+  --bg: 255 248 236;
+  --surface: 255 253 251;
+  --surface-2: 250 240 255;
+  --ink: 74 60 99;
+  --ink-soft: 122 108 150;
+  --pink: 255 175 204;
+  --lavender: 205 180 219;
+  --blue: 189 224 254;
+  --purple: 184 164 240;
+  --accent: var(--pink);
+  --accent-2: var(--lavender);
+  --ring: 184 164 240;
+  --stage-from: 255 214 229;
+  --stage-via: 230 217 240;
+  --stage-to: 224 240 255;
+}
+
+.dark {
+  --bg: 23 20 43;
+  --surface: 33 29 61;
+  --surface-2: 43 38 80;
+  --ink: 241 235 255;
+  --ink-soft: 183 174 219;
+  --pink: 255 156 200;
+  --lavender: 183 156 255;
+  --blue: 142 197 255;
+  --purple: 160 138 235;
+  --ring: 183 156 255;
+  --stage-from: 60 40 90;
+  --stage-via: 40 36 84;
+  --stage-to: 28 44 86;
+}
+
+/* Room themes override the accents and the stage backdrop. */
+[data-room-theme='strawberry'] { --accent: 255 175 204; --accent-2: 255 214 229; --stage-from: 255 200 220; --stage-via: 255 225 235; --stage-to: 255 240 220; }
+[data-room-theme='lavender']   { --accent: 205 180 219; --accent-2: 184 164 240; --stage-from: 226 212 240; --stage-via: 214 200 245; --stage-to: 240 230 255; }
+[data-room-theme='cloud']      { --accent: 189 224 254; --accent-2: 205 180 219; --stage-from: 205 232 255; --stage-via: 224 240 255; --stage-to: 240 248 255; }
+[data-room-theme='vanilla']    { --accent: 255 214 160; --accent-2: 255 175 204; --stage-from: 255 236 200; --stage-via: 255 244 224; --stage-to: 255 226 214; }
+[data-room-theme='starlight']  { --accent: 184 164 240; --accent-2: 189 224 254; --stage-from: 214 200 250; --stage-via: 200 205 250; --stage-to: 226 236 255; }
+[data-room-theme='bubblegum']  { --accent: 255 175 204; --accent-2: 189 224 254; --stage-from: 255 200 225; --stage-via: 232 220 255; --stage-to: 205 232 255; }
+
+.dark[data-room-theme='strawberry'], .dark [data-room-theme='strawberry'] { --accent: 255 156 200; --accent-2: 200 110 160; --stage-from: 80 38 74; --stage-via: 56 34 80; --stage-to: 38 36 76; }
+.dark[data-room-theme='lavender'], .dark [data-room-theme='lavender']     { --accent: 183 156 255; --accent-2: 160 138 235; --stage-from: 58 40 100; --stage-via: 44 38 92; --stage-to: 34 36 84; }
+.dark[data-room-theme='cloud'], .dark [data-room-theme='cloud']           { --accent: 142 197 255; --accent-2: 183 156 255; --stage-from: 30 52 96; --stage-via: 34 44 90; --stage-to: 30 38 80; }
+.dark[data-room-theme='vanilla'], .dark [data-room-theme='vanilla']       { --accent: 255 200 140; --accent-2: 255 156 200; --stage-from: 70 48 70; --stage-via: 54 40 76; --stage-to: 40 36 74; }
+.dark[data-room-theme='starlight'], .dark [data-room-theme='starlight']   { --accent: 160 138 235; --accent-2: 142 197 255; --stage-from: 40 32 96; --stage-via: 32 30 84; --stage-to: 26 30 74; }
+.dark[data-room-theme='bubblegum'], .dark [data-room-theme='bubblegum']   { --accent: 255 156 200; --accent-2: 142 197 255; --stage-from: 74 36 84; --stage-via: 52 36 90; --stage-to: 32 44 90; }
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-body text-ink antialiased;
+    min-height: 100dvh;
+    background-image:
+      radial-gradient(60rem 40rem at 10% -10%, rgb(var(--pink) / 0.22), transparent 60%),
+      radial-gradient(50rem 40rem at 100% 0%, rgb(var(--blue) / 0.28), transparent 60%),
+      radial-gradient(50rem 40rem at 50% 110%, rgb(var(--lavender) / 0.25), transparent 60%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display font-bold tracking-tight;
+  }
+  :focus-visible {
+    outline: 3px solid rgb(var(--ring) / 0.7);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
+  }
+  ::selection {
+    background: rgb(var(--pink) / 0.5);
+  }
+}
+
+@layer components {
+  .card-soft {
+    @apply rounded-3xl border border-white/60 bg-surface/90 shadow-soft backdrop-blur;
+  }
+  .dark .card-soft {
+    @apply border-white/10;
+  }
+  .input-soft {
+    @apply w-full rounded-2xl border-2 border-lavender/50 bg-surface px-4 py-2.5 text-ink placeholder:text-ink-soft/70 transition focus:border-purple focus:outline-none focus:ring-4 focus:ring-purple/20;
+  }
+  .stage-backdrop {
+    background-image: linear-gradient(135deg, rgb(var(--stage-from) / 0.9), rgb(var(--stage-via) / 0.8), rgb(var(--stage-to) / 0.9));
+  }
+}
+
+@layer utilities {
+  .scrollbar-soft {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--lavender) / 0.7) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

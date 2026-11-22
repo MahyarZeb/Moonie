@@ -1,0 +1,27 @@
+{
+  "name": "moonie-signaling-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ephemeral in-memory WebSocket signaling and room-state server for Moonie.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/dev.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --packages=external --target=node20 --outfile=dist/server.js",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7",
+    "ws": "8.23.0"
+  },
+  "overrides": {
+    "rollup": "npm:@rollup/wasm-node@4.68.8"
+  }
+}
