@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { LIMITS } from '../../shared/constants';
+import { DEFAULT_SETTINGS, can, canActOn, type Action } from '../../shared/permissions';
 import { applyCommand, expectedPosition } from '../../shared/playback';
 import type {
   AvatarId,
@@ -11,7 +12,9 @@ import type {
   Participant,
   PlaybackState,
   QueueItem,
+  Role,
   RoomPeek,
+  RoomSettings,
   RoomSnapshot,
   ServerMessage,
   ThemeId,
@@ -81,6 +84,7 @@ export class Room {
   theme: ThemeId;
   passwordHash: PasswordHash | null = null;
   hostId = '';
+  settings: RoomSettings = { ...DEFAULT_SETTINGS };
   readonly participants = new Map<string, ServerParticipant>();
   media: MediaState | null = null;
   playback: PlaybackState;
@@ -153,6 +157,7 @@ export class Room {
       theme: this.theme,
       hasPassword: this.hasPassword,
       hostId: this.hostId,
+      settings: { ...this.settings },
       createdAt: this.createdAt,
       maxParticipants: this.opts.maxParticipants,
       participants: [...this.participants.values()].map((p) => ({ ...p.participant })),
@@ -219,6 +224,17 @@ export class Room {
     this.broadcast({ type: 'chat:typing', id, typing }, id);
   }
 
+  /** The server-held role of a participant. Roles never come from client messages. */
+  roleOf(id: string): Role | undefined {
+    return this.participants.get(id)?.participant.role;
+  }
+
+  /** Permission check for the actor. False for ids that are not in the room. */
+  allowed(actorId: string, action: Action): boolean {
+    const role = this.roleOf(actorId);
+    return role !== undefined && can(role, action, this.settings);
+  }
+
   touch(): void {
     this.lastActiveAt = this.clock.now();
   }
@@ -236,11 +252,15 @@ export class Room {
       avatar: profile.avatar,
       joinedAt: now,
       connected: true,
+      role: 'member',
     };
     this.participants.set(id, { participant, socket, resumeToken, typing: false });
     this.emptySince = null;
     const becameHost = !this.participants.has(this.hostId) || this.hostId === '';
-    if (becameHost) this.hostId = id;
+    if (becameHost) {
+      participant.role = 'host';
+      this.hostId = id;
+    }
     this.sendTo(id, {
       type: 'room:joined',
       selfId: id,
@@ -274,6 +294,7 @@ export class Room {
       }
     }
     if (!this.participants.has(this.hostId)) {
+      sp.participant.role = 'host';
       this.hostId = sp.participant.id;
       this.broadcast({ type: 'host:changed', hostId: this.hostId, reason: 'timeout' }, sp.participant.id);
     }
@@ -317,17 +338,51 @@ export class Room {
     if (this.participants.size === 0) this.emptySince = this.clock.now();
   }
 
-  /** Moves host to the connected participant with the lowest joinedAt. */
-  migrateHost(reason: 'left' | 'transfer' | 'timeout'): boolean {
-    const next = [...this.participants.values()]
+  /**
+   * Successor rule: the longest-connected co-host, else the longest-connected member.
+   * Only connected participants other than the current host qualify.
+   */
+  pickSuccessor(): ServerParticipant | undefined {
+    return [...this.participants.values()]
       .filter((p) => p.participant.connected && p.participant.id !== this.hostId)
-      .sort((a, b) => a.participant.joinedAt - b.participant.joinedAt)[0];
+      .sort((a, b) => {
+        const rank = (r: Role) => (r === 'co_host' ? 0 : 1);
+        return rank(a.participant.role) - rank(b.participant.role) || a.participant.joinedAt - b.participant.joinedAt;
+      })[0];
+  }
+
+  /** Moves host to the successor (see `pickSuccessor`). A former host who still has a record becomes co-host. */
+  migrateHost(reason: 'left' | 'transfer' | 'timeout'): boolean {
+    const next = this.pickSuccessor();
     if (!next) return false;
     this.freezePlayback();
-    this.endShare();
-    this.hostId = next.participant.id;
-    this.broadcast({ type: 'host:changed', hostId: this.hostId, reason });
+    this.assignHost(next.participant.id, reason);
     return true;
+  }
+
+  /**
+   * The only place the host changes. Keeps the invariant that exactly one participant has the host role
+   * and that it is `hostId`. The previous host, if it still has a record, becomes co-host.
+   */
+  private assignHost(id: string, reason: 'left' | 'transfer' | 'timeout'): void {
+    const next = this.participants.get(id);
+    if (!next) return;
+    const prev = this.participants.get(this.hostId);
+    if (prev && prev !== next) prev.participant.role = 'co_host';
+    next.participant.role = 'host';
+    this.hostId = id;
+    this.endShareIfUncontrolled();
+    this.broadcast({ type: 'host:changed', hostId: id, reason });
+    if (prev && prev !== next) this.broadcast({ type: 'participant:updated', participant: { ...prev.participant } });
+    this.broadcast({ type: 'participant:updated', participant: { ...next.participant } });
+  }
+
+  /** Ends the share when its owner can no longer start shares (demoted or gone). */
+  private endShareIfUncontrolled(): void {
+    const s = this.shareSession;
+    if (!s) return;
+    const sharer = this.participants.get(s.sharerId);
+    if (!sharer || !can(sharer.participant.role, 'media.share.start', this.settings)) this.endShare();
   }
 
   /** Pauses a playing youtube/local playback at its extrapolated position and tells everyone. */
@@ -372,22 +427,41 @@ export class Room {
   // --------------------------------------------------------------- actions
 
   transferHost(actorId: string, to: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can do that');
+    if (!this.allowed(actorId, 'host.transfer')) return fail('not_host', 'Only the host can do that');
     if (to === actorId) return fail('invalid_state', 'You are already the host');
     const target = this.participants.get(to);
     if (!target) return fail('not_found', 'Participant not found');
     if (!target.participant.connected) return fail('invalid_state', 'That participant is not connected');
-    this.endShare();
-    this.hostId = to;
-    this.broadcast({ type: 'host:changed', hostId: to, reason: 'transfer' });
+    this.assignHost(to, 'transfer');
+    return { ok: true };
+  }
+
+  /** Host-only: promote a member to co-host or demote a co-host to member. The host role moves only by transfer. */
+  setRole(actorId: string, targetId: string, role: 'co_host' | 'member'): Fail | { ok: true } {
+    const actor = this.roleOf(actorId);
+    if (actor === undefined || !can(actor, 'room.roles', this.settings)) return fail('not_host', 'Only the host can change roles');
+    const target = this.participants.get(targetId);
+    if (!target) return fail('not_found', 'Participant not found');
+    if (targetId === actorId) return fail('invalid_state', 'You are the host');
+    if (!canActOn(actor, target.participant.role, 'room.roles', this.settings, false)) {
+      return fail('forbidden', 'You cannot change that role');
+    }
+    if (target.participant.role === role) return { ok: true };
+    target.participant.role = role;
+    this.endShareIfUncontrolled();
+    this.broadcast({ type: 'participant:updated', participant: { ...target.participant } });
     return { ok: true };
   }
 
   kick(actorId: string, targetId: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can do that');
+    const actor = this.roleOf(actorId);
+    if (actor === undefined || !can(actor, 'member.kick', this.settings)) return fail('not_host', 'Only the host can do that');
     if (targetId === actorId) return fail('invalid_state', 'You cannot remove yourself');
     const target = this.participants.get(targetId);
     if (!target) return fail('not_found', 'Participant not found');
+    if (!canActOn(actor, target.participant.role, 'member.kick', this.settings)) {
+      return fail('forbidden', 'You cannot remove that person');
+    }
     const socket = target.socket;
     if (socket) {
       try {
@@ -417,14 +491,23 @@ export class Room {
 
   applySettings(
     actorId: string,
-    patch: { name?: string; theme?: ThemeId },
+    patch: { name?: string; theme?: ThemeId } & Partial<RoomSettings>,
     password: PasswordHash | null | undefined,
   ): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can do that');
+    if (!this.allowed(actorId, 'room.settings')) return fail('not_host', 'Only the host can do that');
     if (patch.name) this.name = patch.name;
     if (patch.theme) this.theme = patch.theme;
+    if (patch.requireApproval !== undefined) this.settings.requireApproval = patch.requireApproval;
+    if (patch.autoNext !== undefined) this.settings.autoNext = patch.autoNext;
+    if (patch.coHostsCanKick !== undefined) this.settings.coHostsCanKick = patch.coHostsCanKick;
     if (password !== undefined) this.passwordHash = password;
-    this.broadcast({ type: 'room:settings', name: this.name, theme: this.theme, hasPassword: this.hasPassword });
+    this.broadcast({
+      type: 'room:settings',
+      name: this.name,
+      theme: this.theme,
+      hasPassword: this.hasPassword,
+      settings: { ...this.settings },
+    });
     return { ok: true };
   }
 
@@ -503,7 +586,7 @@ export class Room {
     msg: { source: 'screen' | 'file'; hasAudio: boolean; file?: LocalFileMeta },
     ref?: string,
   ): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can share');
+    if (!this.allowed(actorId, 'media.share.start')) return fail('not_host', 'Only the host or a co-host can share');
     if (this.shareSession) return fail('invalid_state', 'Someone is already sharing');
     const prev = this.media;
     const now = this.clock.now();
@@ -557,7 +640,7 @@ export class Room {
   }
 
   stopShare(actorId: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can stop sharing');
+    if (!this.allowed(actorId, 'media.share.stop')) return fail('not_host', 'Only the host or a co-host can stop sharing');
     this.endShare();
     return { ok: true };
   }
@@ -581,7 +664,7 @@ export class Room {
   }
 
   setMedia(actorId: string, media: SetMediaInput, ref?: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can change what is playing');
+    if (!this.allowed(actorId, 'media.set')) return fail('not_host', 'Only the host or a co-host can change what is playing');
     const cur = this.media;
     const same =
       media === null
@@ -609,7 +692,7 @@ export class Room {
     cmd: { rev: number; action: 'play' | 'pause' | 'seek'; positionSec: number; hostServerTime?: number },
     ref?: string,
   ): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can control playback');
+    if (!this.allowed(actorId, 'playback.control')) return fail('not_host', 'Only the host or a co-host can control playback');
     const m = this.media;
     if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
     if (cmd.rev !== m.rev) return fail('stale', 'That command was for an earlier video');
@@ -620,7 +703,7 @@ export class Room {
 
   /** `media:ended` and `media:error` from the host: play the next queue item or pause at the end. */
   mediaFinished(actorId: string, rev: number, failed: boolean): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can do that');
+    if (!this.allowed(actorId, 'playback.control')) return fail('not_host', 'Only the host or a co-host can do that');
     const m = this.media;
     if (m?.kind !== 'youtube' && m?.kind !== 'local') return fail('invalid_state', 'Nothing is playing');
     if (rev !== m.rev) return fail('stale', 'That was for an earlier video');
@@ -667,14 +750,16 @@ export class Room {
   queueRemove(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
     const item = this.queue.find((q) => q.id === itemId);
     if (!item) return fail('not_found', 'That video is no longer in the queue');
-    if (actorId !== this.hostId && item.addedBy !== actorId) return fail('forbidden', 'Only the host or the person who added it can remove it');
+    if (!this.allowed(actorId, 'queue.manage') && item.addedBy !== actorId) {
+      return fail('forbidden', 'Only a host, a co-host or the person who added it can remove it');
+    }
     this.queue = this.queue.filter((q) => q.id !== itemId);
     this.publishQueue(actorId, ref);
     return { ok: true };
   }
 
   queueReorder(actorId: string, itemId: string, toIndex: number, ref?: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can reorder the queue');
+    if (!this.allowed(actorId, 'queue.manage')) return fail('not_host', 'Only the host or a co-host can reorder the queue');
     const from = this.queue.findIndex((q) => q.id === itemId);
     if (from < 0) return fail('not_found', 'That video is no longer in the queue');
     const to = Math.max(0, Math.min(this.queue.length - 1, toIndex));
@@ -691,7 +776,7 @@ export class Room {
   }
 
   queuePlay(actorId: string, itemId: string, ref?: string): Fail | { ok: true } {
-    if (actorId !== this.hostId) return fail('not_host', 'Only the host can start a queued video');
+    if (!this.allowed(actorId, 'queue.manage')) return fail('not_host', 'Only the host or a co-host can start a queued video');
     const item = this.queue.find((q) => q.id === itemId);
     if (!item) return fail('not_found', 'That video is no longer in the queue');
     this.queue = this.queue.filter((q) => q.id !== itemId);
@@ -712,10 +797,11 @@ export class Room {
   private actorFor(id: string): Actor | null {
     const sp = this.participants.get(id);
     if (!sp) return null;
-    return { id, name: sp.participant.name, avatar: sp.participant.avatar, isHost: id === this.hostId };
+    return { id, name: sp.participant.name, avatar: sp.participant.avatar, isHost: can(sp.participant.role, 'game.manage', this.settings) };
   }
 
-  openGame(kind: GameKind): Fail | { ok: true } {
+  openGame(actorId: string, kind: GameKind): Fail | { ok: true } {
+    if (!this.allowed(actorId, 'game.manage')) return fail('not_host', 'Only the host or a co-host can open a game');
     if (this.gameState) return fail('invalid_state', 'A game is already open');
     this.gameState = createGame(kind);
     this.publishGame();
@@ -725,8 +811,8 @@ export class Room {
   closeGame(actorId: string): Fail | { ok: true } {
     const g = this.gameState;
     if (!g) return fail('invalid_state', 'No game is open');
-    if (actorId !== this.hostId && !seatedIds(g).includes(actorId)) {
-      return fail('forbidden', 'Only the host or a seated player can close the game');
+    if (!this.allowed(actorId, 'game.manage') && !seatedIds(g).includes(actorId)) {
+      return fail('forbidden', 'Only a host, a co-host or a seated player can close the game');
     }
     this.gameState = null;
     this.publishGame();

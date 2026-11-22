@@ -28,14 +28,16 @@ async function setup(env: Record<string, string> = {}) {
 const act = (t: Ctx, c: { conn: Parameters<Ctx['send']>[0] }, action: unknown) => t.send(c.conn, { type: 'game:action', action });
 
 describe('game handlers', () => {
-  it('opens a game for everyone, once, and closes it', async () => {
+  it('lets a host open a game for everyone, once, and closes it', async () => {
     const { t, host, guest, room } = await setup();
     await t.send(host.conn, { type: 'game:open', kind: 'tictactoe' });
     expect(lastGame(guest)?.kind).toBe('tictactoe');
     expect(room.gameState?.kind).toBe('tictactoe');
     guest.socket.clear();
     await t.send(guest.conn, { type: 'game:open', kind: 'ludo' });
-    expect(guest.socket.last('error')?.code).toBe('invalid_state');
+    expect(guest.socket.last('error')?.code).toBe('not_host');
+    await t.send(host.conn, { type: 'game:open', kind: 'ludo' });
+    expect(host.socket.last('error')?.code).toBe('invalid_state');
     expect(room.gameState?.kind).toBe('tictactoe');
 
     const outsider = await join(t, host.code, 'Outsider');

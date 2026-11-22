@@ -368,10 +368,14 @@ async function main() {
 
   const tMark = sHost.mark();
   sHost.send({ type: 'host:transfer', to: aId });
+  // The old host is now a co-host and keeps sharing; the new host (a controller) can stop it.
+  await sleep(200);
+  check(!sHost.msgs.slice(tMark).some((m) => m.type === 'media:state'), 'host:transfer keeps the old host sharing as co-host');
+  sA.send({ type: 'share:stop' });
   const oldHostMedia = await sHost.waitFor((m) => m.type === 'media:state', tMark);
   check(
     oldHostMedia?.type === 'media:state' && oldHostMedia.media === null && !('sessionId' in oldHostMedia),
-    'old host receives media:state with media null after host:transfer',
+    'old host receives media:state with media null after the new host stops the share',
   );
 
   const sh2 = await sA.request({ type: 'share:start', source: 'screen', hasAudio: false });

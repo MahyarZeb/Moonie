@@ -155,15 +155,18 @@ describe('rtc:signal relay', () => {
 });
 
 describe('share teardown', () => {
-  it('host:transfer ends the share and the old host receives media:state with null media', async () => {
+  it('host:transfer keeps the old host sharing because a co-host may share', async () => {
     const t = makeCtx();
     const host = await createRoom(t);
     const guest = await join(t, host.code);
     await startScreen(t, host);
     host.socket.clear();
     await t.send(host.conn, { type: 'host:transfer', to: guest.id });
+    expect(host.socket.of('media:state')).toHaveLength(0);
+    expect(room(t, host.code).shareSession).toMatchObject({ sharerId: host.id });
+    expect(room(t, host.code).roleOf(host.id)).toBe('co_host');
+    await t.send(host.conn, { type: 'share:stop' });
     expect(host.socket.last('media:state')?.media).toBeNull();
-    expect(room(t, host.code).shareSession).toBeNull();
   });
 
   it('sharer socket close ends the share immediately', async () => {

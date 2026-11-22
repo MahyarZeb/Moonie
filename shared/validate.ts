@@ -305,7 +305,18 @@ export function parseClientMessage(raw: unknown): ParseResult {
           msg.password = pw;
         }
       }
+      for (const key of ['requireApproval', 'autoNext', 'coHostsCanKick'] as const) {
+        if (raw[key] === undefined) continue;
+        if (typeof raw[key] !== 'boolean') return fail('Invalid setting');
+        msg[key] = raw[key];
+      }
       return Object.keys(msg).length === 1 ? fail('Nothing to update') : ok(msg);
+    }
+    case 'role:set': {
+      const to = validId(raw.to);
+      if (!to) return fail('Invalid participant id');
+      // 'host' is never accepted: ownership moves only through host:transfer.
+      return raw.role === 'co_host' || raw.role === 'member' ? ok({ type, to, role: raw.role }) : fail('Invalid role');
     }
     case 'host:transfer': {
       const to = validId(raw.to);

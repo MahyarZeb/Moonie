@@ -4,8 +4,8 @@ import type { Room } from '../room';
 
 type Msg<T extends ClientMessage['type']> = Extract<ClientMessage, { type: T }>;
 
-export function handleGameOpen(conn: Conn, room: Room, msg: Msg<'game:open'>): void {
-  const res = room.openGame(msg.kind);
+export function handleGameOpen(conn: Conn, room: Room, pid: string, msg: Msg<'game:open'>): void {
+  const res = room.openGame(pid, msg.kind);
   if (!res.ok) conn.error(res.code, res.message, msg.ref);
 }
 

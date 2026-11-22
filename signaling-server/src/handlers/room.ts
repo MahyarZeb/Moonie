@@ -24,7 +24,7 @@ export async function handleSettings(
   pid: string,
   msg: Msg<'room:settings'>,
 ): Promise<void> {
-  if (room.hostId !== pid) return conn.error('not_host', 'Only the host can change settings', msg.ref);
+  if (!room.allowed(pid, 'room.settings')) return conn.error('not_host', 'Only the host can change settings', msg.ref);
   let password: PasswordHash | null | undefined;
   if (msg.password === null) password = null;
   else if (typeof msg.password === 'string') {
@@ -35,12 +35,17 @@ export async function handleSettings(
       return conn.error('server_busy', 'Could not save the password, try again', msg.ref);
     }
   }
-  const res = room.applySettings(pid, { name: msg.name, theme: msg.theme }, password);
+  const res = room.applySettings(pid, { name: msg.name, theme: msg.theme, requireApproval: msg.requireApproval, autoNext: msg.autoNext, coHostsCanKick: msg.coHostsCanKick }, password);
   if (!res.ok) conn.error(res.code, res.message, msg.ref);
 }
 
 export function handleTransfer(conn: Conn, room: Room, pid: string, msg: Msg<'host:transfer'>): void {
   const res = room.transferHost(pid, msg.to);
+  if (!res.ok) conn.error(res.code, res.message, msg.ref);
+}
+
+export function handleRole(conn: Conn, room: Room, pid: string, msg: Msg<'role:set'>): void {
+  const res = room.setRole(pid, msg.to, msg.role);
   if (!res.ok) conn.error(res.code, res.message, msg.ref);
 }
 

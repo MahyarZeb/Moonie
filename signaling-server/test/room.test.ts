@@ -387,7 +387,7 @@ describe('endShare', () => {
     expect(room.playback).toMatchObject({ status: 'paused', positionSec: 33, rev: 5 });
   });
 
-  it('runs on sharer socket close, host transfer and host migration', async () => {
+  it('runs on sharer socket close and host migration; a transfer keeps the old host (now co-host) sharing', async () => {
     const t = makeCtx();
     const host = await createRoom(t);
     const guest = await join(t, host.code);
@@ -400,8 +400,10 @@ describe('endShare', () => {
     };
     share();
     await t.send(host.conn, { type: 'host:transfer', to: guestId });
-    expect(room.shareSession).toBeNull();
-    expect(host.socket.last('media:state')?.media).toBeNull();
+    expect(room.roleOf(hostId)).toBe('co_host');
+    expect(room.shareSession).not.toBeNull();
+    expect(room.media?.kind).toBe('screen');
+    room.endShare();
 
     share();
     t.drop(guest); // guest is now the sharer and host

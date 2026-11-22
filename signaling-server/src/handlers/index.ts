@@ -7,7 +7,7 @@ import { handleLocalReady, handleMediaEnded, handleMediaError, handleMediaSet } 
 import { handlePlayback } from './playback';
 import { handleQueueAdd, handleQueuePlay, handleQueueRemove, handleQueueReorder } from './queue';
 import { handleRtcSignal, handleShareStart, handleShareStop } from './share';
-import { handleKick, handleLeave, handlePing, handleProfile, handleSettings, handleTransfer } from './room';
+import { handleKick, handleLeave, handlePing, handleProfile, handleRole, handleSettings, handleTransfer } from './room';
 
 /** Routes one validated client message. */
 export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessage): Promise<void> {
@@ -38,6 +38,8 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
       return handleProfile(ctx, room, pid, msg);
     case 'room:settings':
       return handleSettings(ctx, conn, room, pid, msg);
+    case 'role:set':
+      return handleRole(conn, room, pid, msg);
     case 'host:transfer':
       return handleTransfer(conn, room, pid, msg);
     case 'host:kick':
@@ -71,7 +73,7 @@ export async function dispatch(ctx: HandlerContext, conn: Conn, msg: ClientMessa
     case 'chat:typing':
       return handleChatTyping(room, pid, msg);
     case 'game:open':
-      return handleGameOpen(conn, room, msg);
+      return handleGameOpen(conn, room, pid, msg);
     case 'game:close':
       return handleGameClose(conn, room, pid, msg);
     case 'game:action':

@@ -202,3 +202,22 @@ describe('misc rows', () => {
     expect(parseGameAction('tictactoe', { type: 'roll' })).toBeNull();
   });
 });
+
+describe('roles and settings messages', () => {
+  it('role:set accepts only co_host or member and drops spoofed fields', () => {
+    const r = parse({ type: 'role:set', to: 'p1', role: 'co_host', isHost: true, from: 'x' });
+    expect(r).toEqual({ ok: true, msg: { type: 'role:set', to: 'p1', role: 'co_host' } });
+    expect(isOk({ type: 'role:set', to: 'p1', role: 'member' })).toBe(true);
+    for (const role of ['host', 'HOST', 'admin', '', 1, null, undefined]) {
+      expect(isOk({ type: 'role:set', to: 'p1', role }), String(role)).toBe(false);
+    }
+    expect(isOk({ type: 'role:set', role: 'member' })).toBe(false);
+  });
+
+  it('room:settings takes three optional booleans and nothing else', () => {
+    const r = parse({ type: 'room:settings', requireApproval: false, autoNext: true, coHostsCanKick: false, role: 'host' });
+    expect(r).toEqual({ ok: true, msg: { type: 'room:settings', requireApproval: false, autoNext: true, coHostsCanKick: false } });
+    expect(isOk({ type: 'room:settings', autoNext: 'yes' })).toBe(false);
+    expect(isOk({ type: 'room:settings', coHostsCanKick: 1 })).toBe(false);
+  });
+});
